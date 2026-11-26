@@ -2,14 +2,16 @@
 
 Folder ini adalah aplikasi baru dan terisolasi. `Code.gs`, `Index.html`, dan folder `app/` lama tidak dibaca, ditulis, atau dihapus oleh aplikasi ini.
 
-Tahap pertama sengaja dibuat **read-only terhadap Google Sheets**:
+Migrasi dilakukan bertahap dengan snapshot Google Sheets yang tetap **read-only**:
 
 - seluruh sheet disalin ke PostgreSQL sebagai snapshot append-only;
 - setiap baris dan snapshot memiliki checksum SHA-256;
 - import ulang tidak menghapus data dan snapshot identik tidak digandakan;
 - akun diproyeksikan ke tabel login tanpa mengubah sheet sumber;
 - hash PIN `v1$...` milik GAS tetap dapat dipakai, lalu ditingkatkan di Railway setelah login berhasil;
-- dashboard baru menampilkan status dan ringkasan migrasi, sementara operasional tetap memakai GAS sampai modul dipindahkan satu per satu.
+- mapel, kelas, akun guru/siswa/orang tua, dan bank soal sudah memiliki tabel serta write native PostgreSQL;
+- data yang sudah dikelola native ditandai sehingga sinkronisasi transisi tidak dapat menimpanya;
+- modul lain tetap memakai snapshot atau aplikasi lama sampai dipindahkan satu per satu.
 
 ## Menjalankan lokal
 
@@ -85,4 +87,4 @@ Railway menjalankan pre-deploy sebelum aplikasi baru aktif; kegagalan migrasi ak
 
 ## Batas tahap ini
 
-UI ini belum menggantikan alur presensi, yaumiah, tugas, ujian, dan administrasi pada GAS. Tahap berikutnya memindahkan modul per modul dengan rekonsiliasi jumlah record dan masa dual-run. Jangan mengalihkan seluruh pengguna sebelum checklist di [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) selesai.
+CRUD data master/akun dan pembuatan bank soal sudah native. Presensi, yaumiah, tugas, komunikasi, pelaksanaan CBT, approval, dan penilaian masih dipindahkan bertahap. Jangan menonaktifkan GAS sebelum checklist cutover di [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) selesai.

@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=2.32">
-  <script src="/assets/app.js?v=2.32" defer></script>
+  <link rel="stylesheet" href="/assets/styles.css?v=2.33">
+  <script src="/assets/app.js?v=2.33" defer></script>
 </head>
 <body>
   <div id="loading-bar" class="loading-bar" hidden><span></span></div>
@@ -92,12 +92,36 @@
       </section>
 
       <section id="questions-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Bank soal UAS</span><h2 id="questions-title">Kesiapan soal & sesi</h2><p id="questions-copy">Statistik tanpa membuka kunci jawaban atau token ujian.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Kelola soal di GAS</a></div>
+        <div class="page-heading"><div><span>Bank soal UAS</span><h2 id="questions-title">Kesiapan soal & sesi</h2><p id="questions-copy">Buat soal langsung di Railway; data tersimpan secara native di PostgreSQL.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Referensi versi GAS</a></div>
+        <section id="question-form-surface" class="surface">
+          <div class="section-heading"><div><span>Pembuatan soal</span><h2>Tambah soal UAS</h2></div><span class="soft-badge">PostgreSQL native</span></div>
+          <form id="question-form" class="data-form">
+            <div class="form-grid three"><label>ID soal<input id="question-id" maxlength="80" required></label><label>Tipe soal<select id="question-type"><option value="PG">Pilihan ganda</option><option value="PGK">Pilihan ganda kompleks</option><option value="ISIAN">Isian</option><option value="ESAI">Esai</option></select></label><label>Level kognitif<select id="question-level"><option>C1</option><option>C2</option><option selected>C3</option><option>C4</option><option>C5</option><option>C6</option></select></label></div>
+            <div class="form-grid three"><label>Mata pelajaran<select id="question-subject" required></select></label><label>Kelas<select id="question-class" required></select></label><label>Kompetensi dasar<input id="question-kd" maxlength="120" placeholder="Opsional"></label></div>
+            <label>Pertanyaan<textarea id="question-text" rows="4" maxlength="4000" required placeholder="Tuliskan pertanyaan soal…"></textarea></label>
+            <div id="question-options" class="form-grid two"><label>Opsi A<input id="question-option-a" maxlength="1000"></label><label>Opsi B<input id="question-option-b" maxlength="1000"></label><label>Opsi C<input id="question-option-c" maxlength="1000"></label><label>Opsi D<input id="question-option-d" maxlength="1000"></label><label>Opsi E<input id="question-option-e" maxlength="1000"></label><label>Kunci jawaban<input id="question-key" maxlength="500" placeholder="Contoh: A"></label></div>
+            <div id="question-message" class="form-message" role="alert"></div><div class="form-actions"><button class="primary-button compact" type="submit">Simpan soal</button><button id="question-reset" class="secondary-button compact" type="button">Kosongkan</button></div>
+          </form>
+        </section>
         <div class="two-column"><section class="surface"><div class="section-heading"><div><span>Bank soal</span><h2>Rekap per mapel</h2></div></div><div id="question-table" class="table-wrap large-table"></div></section><section class="surface"><div class="section-heading"><div><span>Kontrol ujian</span><h2>Status sesi</h2></div></div><div id="session-list" class="session-list"></div></section></div>
       </section>
 
+      <section id="management-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Superadmin</span><h2>Kelola data sekolah</h2><p>Tambah, ubah, dan nonaktifkan mapel, kelas, akun guru, siswa, serta orang tua langsung di PostgreSQL Railway.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Referensi versi GAS</a></div>
+        <div id="management-tabs" class="tab-row"></div>
+        <div class="management-layout">
+          <section class="surface management-editor"><div class="section-heading"><div><span id="management-form-eyebrow">Data baru</span><h2 id="management-form-title">Tambah data</h2></div></div><form id="management-form" class="data-form"><div id="management-form-fields" class="form-grid"></div><div id="management-message" class="form-message" role="alert"></div><div class="form-actions"><button id="management-save" class="primary-button compact" type="submit">Simpan</button><button id="management-cancel" class="secondary-button compact" type="button">Batal</button></div></form></section>
+          <section class="surface"><div class="table-toolbar"><input id="management-search" type="search" placeholder="Cari data…"><button id="management-new" class="primary-button compact" type="button">+ Tambah baru</button></div><div id="management-table" class="table-wrap large-table"></div></section>
+        </div>
+      </section>
+
+      <section id="services-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Layanan sesuai peran</span><h2>Fitur lengkap SISKU</h2><p>Modul yang belum native sedang dipindahkan bertahap. Selama masa migrasi, layanan lamanya tetap dapat dipakai tanpa kehilangan data.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka aplikasi lama</a></div>
+        <div id="service-grid" class="service-grid"></div>
+      </section>
+
       <section id="master-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Data sekolah</span><h2 id="master-title">Direktori sekolah</h2><p>Data ditampilkan tanpa PIN dan dibatasi menurut peran.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Kelola master di GAS</a></div>
+        <div class="page-heading"><div><span>Data sekolah</span><h2 id="master-title">Direktori sekolah</h2><p>Data native ditampilkan tanpa PIN dan dibatasi menurut peran.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Lihat data lama</a></div>
         <section class="surface"><div id="master-tabs" class="tab-row"></div><div class="table-toolbar"><input id="master-search" type="search" placeholder="Cari data master…"><span id="master-count" class="soft-badge">0 data</span></div><div id="master-table" class="table-wrap large-table"></div></section>
       </section>
 
@@ -108,13 +132,13 @@
       </section>
 
       <section id="security-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Keamanan akun</span><h2>Ganti PIN Railway</h2><p>Gunakan enam digit unik. Perubahan ini hanya berlaku untuk login Railway selama masa transisi.</p></div></div>
+        <div class="page-heading"><div><span>Keamanan akun</span><h2>Ganti PIN SISKU</h2><p>Gunakan enam digit unik. PIN baru dikelola oleh aplikasi Railway dan tidak bergantung pada GAS.</p></div></div>
         <section class="surface form-surface"><form id="change-pin-form"><label for="current-pin">PIN saat ini</label><input id="current-pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" required><label for="new-pin">PIN baru, 6 digit</label><input id="new-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required><label for="confirm-pin">Ulangi PIN baru</label><input id="confirm-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required><div id="pin-message" class="form-message" role="alert"></div><button class="primary-button" type="submit">Perbarui PIN</button></form></section>
       </section>
     </main>
 
     <nav id="bottom-navigation" class="bottom-navigation" aria-label="Menu seluler"></nav>
-    <footer class="app-footer"><span>SISKU Railway v2.32</span><span>Data operasional tetap aman di GAS selama transisi</span></footer>
+    <footer class="app-footer"><span>SISKU Railway v2.33</span><span>Data master, akun, dan bank soal dikelola native di PostgreSQL</span></footer>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

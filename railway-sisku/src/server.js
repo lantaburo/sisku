@@ -10,6 +10,7 @@ const { getConfig } = require('./config');
 const { getPool, closePool } = require('./db');
 const { verifyPin, hashPin, createSessionToken, parseCookies, sha256 } = require('./security');
 const { syncFromGasOnce } = require('./gas-sync');
+const { actionAllowed, runNativeAction } = require('./native-actions');
 const {
   normalized, normalizeKey, latestImport, loadSheet, value, schoolDate,
   todayJakarta, visibleAnnouncement
@@ -91,7 +92,8 @@ async function sessionUser(req) {
   const token = parseCookies(req.headers.cookie)[cookieName];
   if (!token) return null;
   const result = await db().query(
-    `SELECT u.id, u.username, u.role, u.full_name, u.class_code, u.student_nis, s.id AS session_id
+    `SELECT u.id, u.username, u.role, u.full_name, u.class_code, u.student_nis,
+            s.id AS session_id
        FROM user_sessions s
        JOIN app_users u ON u.id = s.user_id
       WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.active = true
@@ -138,10 +140,34 @@ function byNewest(rows, fieldNames) {
 app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/ready', async (req, res) => {
   try {
-    await db().query("SELECT 1 FROM schema_migrations WHERE version = '001_initial.sql'");
+    await db().query('SELECT code FROM school_subjects LIMIT 0');
     res.json({ status: 'ready' });
   } catch (_) {
     res.status(503).json({ status: 'not_ready' });
+  }
+});
+
+app.get('/api/v1/form-options', requireAuth, requireRoles('superadmin', 'guru', 'kepsek'), async (req, res, next) => {
+  try {
+    const [subjectResult, classResult, teacherResult] = await Promise.all([
+      db().query('SELECT code, name FROM school_subjects WHERE active = true ORDER BY name'),
+      db().query('SELECT code, name FROM school_classes WHERE active = true ORDER BY code'),
+      db().query(`SELECT p.nip, u.full_name AS name FROM teacher_profiles p JOIN app_users u ON u.id = p.user_id WHERE p.active = true AND u.active = true ORDER BY u.full_name`)
+    ]);
+    let subjects = subjectResult.rows;
+    if (req.user.role === 'guru') {
+      const profile = await db().query('SELECT subjects FROM teacher_profiles WHERE user_id = $1 AND active = true', [req.user.id]);
+      const assignments = normalized(profile.rows[0] && profile.rows[0].subjects).split(/[;,|\n]+/).map(normalizeKey).filter(Boolean);
+      subjects = subjects.filter(item => assignments.includes(normalizeKey(item.code)) || assignments.includes(normalizeKey(item.name)));
+    }
+    res.json({
+      status: 'ok',
+      subjects,
+      classes: classResult.rows,
+      teachers: req.user.role === 'superadmin' ? teacherResult.rows : []
+    });
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -170,7 +196,7 @@ app.post('/api/v1/auth/login', sameOrigin, loginLimiter, async (req, res, next) 
     if (verification.needsUpgrade) {
       const upgraded = await hashPin(pin);
       await db().query(
-        'UPDATE app_users SET pin_hash = $1, pin_upgraded_at = now(), updated_at = now() WHERE id = $2',
+        'UPDATE app_users SET pin_hash = $1, pin_upgraded_at = now(), native_managed = true, updated_at = now() WHERE id = $2',
         [upgraded, user.id]
       );
     }
@@ -188,7 +214,10 @@ app.post('/api/v1/auth/login', sameOrigin, loginLimiter, async (req, res, next) 
     setSessionCookie(res, session.token);
     res.json({
       status: 'ok',
-      user: { username: user.username, role: user.role, name: user.full_name, classCode: user.class_code, nis: user.student_nis }
+      user: {
+        username: user.username, role: user.role, name: user.full_name,
+        classCode: user.class_code, nis: user.student_nis
+      }
     });
   } catch (error) {
     next(error);
@@ -212,6 +241,24 @@ app.get('/api/v1/auth/me', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+app.post('/api/v1/native/action', sameOrigin, requireAuth, async (req, res) => {
+  const action = String(req.body && req.body.action || '').trim().toUpperCase();
+  const data = req.body && req.body.data;
+  if (!actionAllowed(req.user.role, action)) {
+    return res.status(403).json({ status: 'error', message: 'Aksi ini tidak diizinkan untuk peran akun Anda.' });
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return res.status(400).json({ status: 'error', message: 'Data formulir tidak valid.' });
+  }
+  try {
+    const result = await runNativeAction(db(), req.user, action, data);
+    res.json(result);
+  } catch (error) {
+    console.warn('NATIVE_ACTION_FAILED', { requestId: req.requestId, action, username: req.user.username, message: error.message });
+    res.status(error.status || 422).json({ status: 'error', message: String(error.message || 'Perubahan belum dapat disimpan.').slice(0, 300) });
   }
 });
 
@@ -250,7 +297,7 @@ app.post('/api/v1/auth/change-pin', sameOrigin, requireAuth, async (req, res, ne
     try {
       await client.query('BEGIN');
       await client.query(
-        'UPDATE app_users SET pin_hash = $1, pin_upgraded_at = now(), updated_at = now() WHERE id = $2',
+        'UPDATE app_users SET pin_hash = $1, pin_upgraded_at = now(), native_managed = true, updated_at = now() WHERE id = $2',
         [nextHash, req.user.id]
       );
       await client.query(
@@ -280,15 +327,15 @@ app.get('/api/v1/overview', requireAuth, async (req, res, next) => {
     const activeImport = await latestImport(db());
     if (!activeImport) return res.json({ status: 'ok', empty: true });
     const [classes, teachers, subjects, attendance, yaumiah, grades, tasks, attempts, questions, announcements, achievements, examSessions] = await Promise.all([
-      loadSheet(db(), 'Master_Kelas', activeImport.id),
-      loadSheet(db(), 'Master_Guru', activeImport.id),
-      loadSheet(db(), 'Master_Mapel', activeImport.id),
+      db().query('SELECT code, name, homeroom_name, capacity FROM school_classes WHERE active = true').then(result => result.rows.map(row => ({ Kode_Kelas: row.code, Nama_Kelas: row.name, Wali_Kelas: row.homeroom_name, Jumlah_Siswa: row.capacity }))),
+      db().query(`SELECT p.nip, p.subjects, p.homeroom_class, u.username, u.full_name FROM teacher_profiles p JOIN app_users u ON u.id = p.user_id WHERE p.active = true AND u.active = true`).then(result => result.rows.map(row => ({ NIP: row.nip, Username: row.username, Nama_Guru: row.full_name, Mata_Pelajaran: row.subjects, Wali_Kelas: row.homeroom_class }))),
+      db().query('SELECT code, name, subject_group FROM school_subjects WHERE active = true').then(result => result.rows.map(row => ({ Kode_Mapel: row.code, Nama_Mapel: row.name, Kelompok: row.subject_group }))),
       loadSheet(db(), 'Presensi', activeImport.id),
       loadSheet(db(), 'Yaumiah_Log', activeImport.id),
       loadSheet(db(), 'Nilai_UAS', activeImport.id),
       loadSheet(db(), 'Tugas_Kelas', activeImport.id),
       loadSheet(db(), 'Exam_Attempts', activeImport.id),
-      loadSheet(db(), 'Bank_Soal_UAS', activeImport.id),
+      db().query(`SELECT id, subject, class_code, approval_status, creator_username FROM school_questions WHERE active = true`).then(result => result.rows.map(row => ({ ID_Soal: row.id, Mapel: row.subject, Kelas: row.class_code, Status_Approval: row.approval_status, Pembuat_Username: row.creator_username }))),
       loadSheet(db(), 'Announcements', activeImport.id),
       loadSheet(db(), 'Tugas_Prestasi', activeImport.id),
       loadSheet(db(), 'Sesi_Ujian', activeImport.id)
@@ -461,7 +508,7 @@ app.get('/api/v1/overview', requireAuth, async (req, res, next) => {
       announcements: announcementList,
       questionStats: Array.from(questionStatsMap.values()).sort((left, right) => left.subject.localeCompare(right.subject)),
       examSessions: safeExamSessions,
-      accessMode: 'read-only-snapshot',
+      accessMode: 'native-postgresql-with-legacy-snapshot',
       sourceImportedAt: activeImport.imported_at
     });
   } catch (error) {
@@ -475,7 +522,26 @@ app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'kep
     const search = String(req.query.search || '').trim().toLowerCase().slice(0, 80);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
     let items = [];
-    if (resource === 'students') {
+    if (resource === 'student_accounts') {
+      if (req.user.role !== 'superadmin') return res.status(403).json({ status: 'error', message: 'Data akun siswa hanya tersedia untuk superadmin.' });
+      const result = await db().query(
+        `SELECT student.username, student.full_name, student.class_code, student.student_nis,
+                parent.username AS parent_username, parent.full_name AS parent_name
+           FROM app_users student
+           LEFT JOIN LATERAL (
+             SELECT p.username, p.full_name
+               FROM app_users p
+              WHERE p.active = true AND p.role = 'ortu' AND p.student_nis = student.student_nis
+              ORDER BY p.full_name, p.username LIMIT 1
+           ) parent ON true
+          WHERE student.active = true AND student.role = 'siswa'
+          ORDER BY student.class_code, student.full_name`
+      );
+      items = result.rows.map(row => ({
+        nis: row.student_nis, name: row.full_name, classCode: row.class_code,
+        username: row.username, parentUsername: row.parent_username || '', parentName: row.parent_name || ''
+      }));
+    } else if (resource === 'students') {
       const result = await db().query(
         `SELECT username, full_name, class_code, student_nis
            FROM app_users WHERE active = true AND role = 'siswa'
@@ -489,11 +555,6 @@ app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'kep
       }
     } else {
       if (req.user.role === 'guru') return res.status(403).json({ status: 'error', message: 'Data ini hanya tersedia untuk pimpinan sekolah.' });
-      const mapping = {
-        classes: ['Master_Kelas', row => ({ code: normalized(value(row, 'Kode_Kelas')), name: normalized(value(row, 'Nama_Kelas')), homeroom: normalized(value(row, 'Wali_Kelas')), capacity: number(value(row, 'Jumlah_Siswa')) })],
-        teachers: ['Master_Guru', row => ({ nip: normalized(value(row, 'NIP')), username: normalized(value(row, 'Username')), name: normalized(value(row, 'Nama_Guru')), subjects: normalized(value(row, 'Mata_Pelajaran')), classCode: normalized(value(row, 'Wali_Kelas')) })],
-        subjects: ['Master_Mapel', row => ({ code: normalized(value(row, 'Kode_Mapel')), name: normalized(value(row, 'Nama_Mapel')), group: normalized(value(row, 'Kelompok')) })]
-      };
       if (resource === 'accounts') {
         if (req.user.role !== 'superadmin') return res.status(403).json({ status: 'error', message: 'Direktori akun hanya tersedia untuk superadmin.' });
         const accountResult = await db().query(
@@ -501,14 +562,19 @@ app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'kep
              FROM app_users ORDER BY role, full_name`
         );
         items = accountResult.rows.map(row => ({ username: row.username, name: row.full_name, role: row.role, classCode: row.class_code, nis: row.student_nis, active: row.active }));
-      } else {
-        if (!mapping[resource]) return res.status(404).json({ status: 'error', message: 'Data master tidak ditemukan.' });
-        const [sheetName, mapper] = mapping[resource];
-        items = (await loadSheet(db(), sheetName)).map(mapper);
-      }
+      } else if (resource === 'classes') {
+        const result = await db().query('SELECT code, name, homeroom_name, capacity FROM school_classes WHERE active = true ORDER BY code');
+        items = result.rows.map(row => ({ code: row.code, name: row.name, homeroom: row.homeroom_name, capacity: row.capacity }));
+      } else if (resource === 'teachers') {
+        const result = await db().query(`SELECT p.nip, p.subjects, p.homeroom_class, u.username, u.full_name FROM teacher_profiles p JOIN app_users u ON u.id = p.user_id WHERE p.active = true AND u.active = true ORDER BY u.full_name`);
+        items = result.rows.map(row => ({ nip: row.nip, username: row.username, name: row.full_name, subjects: row.subjects, classCode: row.homeroom_class }));
+      } else if (resource === 'subjects') {
+        const result = await db().query('SELECT code, name, subject_group FROM school_subjects WHERE active = true ORDER BY name');
+        items = result.rows.map(row => ({ code: row.code, name: row.name, group: row.subject_group }));
+      } else return res.status(404).json({ status: 'error', message: 'Data master tidak ditemukan.' });
     }
     if (search) items = items.filter(item => Object.values(item).some(itemValue => String(itemValue).toLowerCase().includes(search)));
-    res.json({ status: 'ok', resource, total: items.length, items: items.slice(0, limit), readOnly: true });
+    res.json({ status: 'ok', resource, total: items.length, items: items.slice(0, limit), readOnly: req.user.role !== 'superadmin' });
   } catch (error) {
     next(error);
   }
@@ -550,10 +616,10 @@ app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
       sheets,
       roles,
       modules: [
-        { id: 'master', label: 'Data master', status: 'ready', detail: 'Tersedia read-only sesuai peran' },
-        { id: 'presensi', label: 'Presensi & yaumiah', status: 'ready', detail: 'Riwayat tersedia, input tetap di GAS' },
-        { id: 'tugas', label: 'Tugas & komunikasi', status: 'gas', detail: 'Tetap berjalan di GAS' },
-        { id: 'ujian', label: 'Ujian & nilai', status: 'gas', detail: 'Dipindahkan paling akhir' }
+        { id: 'master', label: 'Data master & akun', status: 'native', detail: 'CRUD native PostgreSQL tersedia' },
+        { id: 'questions', label: 'Bank soal', status: 'native', detail: 'Pembuatan soal native tersedia' },
+        { id: 'presensi', label: 'Presensi & yaumiah', status: 'migration', detail: 'Riwayat sudah di PostgreSQL; input berikutnya' },
+        { id: 'tugas', label: 'Tugas & komunikasi', status: 'migration', detail: 'Tahap migrasi selanjutnya' }
       ]
     });
   } catch (error) {

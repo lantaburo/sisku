@@ -2,8 +2,8 @@
 
 ## Prinsip
 
-1. GAS dan Spreadsheet tetap menjadi sumber utama selama masa transisi.
-2. Railway hanya membaca data sumber sampai rekonsiliasi lolos.
+1. GAS dan Spreadsheet hanya menjadi sumber migrasi untuk modul yang belum dipindahkan.
+2. Setelah sebuah modul berstatus native, PostgreSQL Railway menjadi sumber utamanya dan snapshot GAS tidak boleh menimpa perubahan native.
 3. Setiap import menghasilkan snapshot baru; snapshot lama tidak ditimpa.
 4. Pemindahan write dilakukan per modul, bukan sekaligus.
 5. Cutover wajib memiliki backup Spreadsheet dan titik rollback.
@@ -19,9 +19,10 @@
 
 ### 1 — Data master
 
-- Proyeksikan mapel, kelas, guru, siswa, orang tua, dan pengaturan organisasi.
+- Status: **native tahap awal** untuk mapel, kelas, akun guru, siswa, orang tua, dan pembuatan bank soal.
+- Proyeksikan mapel, kelas, guru, siswa, orang tua, bank soal, dan pengaturan organisasi.
 - Bandingkan jumlah serta checksum antara Spreadsheet dan PostgreSQL.
-- Tambahkan CRUD dengan audit log dan soft delete.
+- CRUD memakai transaksi, audit log, dan soft delete. Data hasil snapshot hanya menjadi seed.
 
 ### 2 — Presensi dan yaumiah
 

@@ -11,27 +11,36 @@ const ROLE_LABELS = {
 const ROLE_NAV = {
   siswa: [
     ['summary', '🏠', 'Beranda'], ['attendance', '✓', 'Presensi'], ['yaumiah', '📿', 'Yaumiah'],
-    ['tasks', '🏆', 'Tugas & Prestasi'], ['grades', '📝', 'Ujian & Nilai'], ['security', '🔑', 'Keamanan']
+    ['tasks', '🏆', 'Tugas & Prestasi'], ['grades', '📝', 'Ujian & Nilai'], ['services', '▦', 'Layanan'], ['security', '🔑', 'Keamanan']
   ],
   ortu: [
     ['summary', '👨‍👩‍👦', 'Monitoring Anak'], ['attendance', '✓', 'Presensi'], ['yaumiah', '✍️', 'Yaumiah'],
-    ['tasks', '🏅', 'Tugas & Prestasi'], ['grades', '📊', 'Nilai Anak'], ['security', '🔑', 'Keamanan']
+    ['tasks', '🏅', 'Tugas & Prestasi'], ['grades', '📊', 'Nilai Anak'], ['services', '▦', 'Layanan'], ['security', '🔑', 'Keamanan']
   ],
   guru: [
     ['summary', '🏠', 'Beranda'], ['attendance', '📊', 'Monitoring Siswa'], ['yaumiah', '🕌', 'Yaumiah'],
     ['tasks', '📚', 'Tugas & Prestasi'], ['grades', '📝', 'Rekap Nilai'], ['questions', '📑', 'Bank Soal'],
-    ['master', '👥', 'Data Siswa'], ['security', '🔑', 'Keamanan']
+    ['master', '👥', 'Data Siswa'], ['services', '▦', 'Layanan'], ['security', '🔑', 'Keamanan']
   ],
   kepsek: [
     ['summary', '📈', 'Dashboard Eksekutif'], ['attendance', '✓', 'Presensi'], ['yaumiah', '🕌', 'Supervisi Yaumiah'],
     ['grades', '📊', 'Rekap Akademik'], ['questions', '✅', 'Approval Soal'], ['master', '🏛️', 'Data Sekolah'],
-    ['security', '🔑', 'Keamanan']
+    ['services', '▦', 'Layanan'], ['security', '🔑', 'Keamanan']
   ],
   superadmin: [
     ['summary', '🏠', 'Dashboard'], ['attendance', '✓', 'Presensi'], ['yaumiah', '📿', 'Yaumiah'],
-    ['tasks', '📚', 'Tugas & Prestasi'], ['grades', '📝', 'Ujian & Nilai'], ['master', '🏛️', 'Data Master'],
-    ['integration', '⚡', 'GAS & Railway'], ['security', '🔑', 'Keamanan']
+    ['tasks', '📚', 'Tugas & Prestasi'], ['grades', '📝', 'Ujian & Nilai'], ['questions', '📑', 'Bank Soal'],
+    ['management', '⚙️', 'Kelola Data'], ['master', '🏛️', 'Direktori'],
+    ['services', '▦', 'Layanan'], ['integration', '⚡', 'GAS & Railway'], ['security', '🔑', 'Keamanan']
   ]
+};
+
+const SERVICE_FEATURES = {
+  siswa: [['📝', 'CBT Soal UAS', 'Mulai latihan atau ujian aktif sesuai kelas.'], ['✉️', 'Pesan ke Admin', 'Kirim pertanyaan atau kendala ke superadmin.'], ['📍', 'Input Presensi', 'Presensi dengan validasi QR dan lokasi.'], ['📿', 'Isi Yaumiah', 'Catat pembiasaan harian secara lengkap.']],
+  ortu: [['✍️', 'Paraf Yaumiah', 'Tinjau dan beri catatan pembinaan untuk ananda.'], ['✉️', 'Pesan ke Admin', 'Sampaikan pertanyaan kepada superadmin.'], ['⚠️', 'Komplain Nilai', 'Ajukan peninjauan nilai dengan argumentasi.']],
+  guru: [['🕌', 'Atur Yaumiah & Tahfidz', 'Kelola aktivitas dan target pembinaan kelas.'], ['📚', 'Kelola Tugas & Prestasi', 'Terbitkan tugas dan catat prestasi siswa.'], ['🚀', 'Sesi Ujian', 'Buka atau tutup CBT sesuai mapel yang diampu.'], ['✉️', 'Pesan ke Admin', 'Kirim kendala operasional ke superadmin.']],
+  kepsek: [['✅', 'Approval Soal Lengkap', 'Tinjau, revisi, setujui, atau hapus bank soal.'], ['✉️', 'Pesan ke Admin', 'Sampaikan pesan internal ke superadmin.'], ['📊', 'Dokumen Rekap', 'Cetak dan unduh rekap sekolah dari GAS.']],
+  superadmin: [['👥', 'Akun & Impersonasi', 'Audit tampilan aplikasi sebagai akun non-admin.'], ['📜', 'Log Aktivitas', 'Tinjau aktivitas pengguna dan modul.'], ['📣', 'Pengumuman', 'Kirim informasi ke semua atau akun tertentu.'], ['📥', 'Pesan Masuk', 'Baca pesan internal dan komplain nilai.'], ['📂', 'Data Drive & Acuan', 'Akses dokumen acuan dan folder pendukung.'], ['🏛️', 'Organisasi & Impor Massal', 'Atur kop dokumen dan impor data dalam jumlah besar.']]
 };
 
 const ROLE_HERO = {
@@ -95,7 +104,9 @@ const MASTER_COLUMNS = {
 
 const state = {
   user: null, dashboard: null, overview: null, activeView: 'summary',
-  masterResource: 'students', masterItems: [], tableRows: {}, loadingCount: 0
+  masterResource: 'students', masterItems: [], tableRows: {}, loadingCount: 0,
+  formOptions: null, managementResource: 'subjects', managementItems: [],
+  managementEditing: null, managementLoaded: false
 };
 
 function formatNumber(value) {
@@ -128,6 +139,7 @@ async function api(path, options = {}) {
     if (!response.ok) {
       const error = new Error(payload.message || 'Layanan belum dapat dihubungi.');
       error.status = response.status;
+      error.code = payload.code;
       throw error;
     }
     return payload;
@@ -265,6 +277,8 @@ function showView(name) {
   document.querySelectorAll('.view-panel').forEach(panel => { panel.hidden = panel.id !== `${target}-panel`; });
   document.querySelectorAll('.nav-button').forEach(button => button.classList.toggle('active', button.dataset.view === target));
   if (target === 'master') loadMaster(state.masterResource).catch(error => toast(error.message));
+  if (target === 'management') prepareManagement().catch(error => toast(error.message));
+  if (target === 'questions' && ['guru', 'superadmin'].includes(state.user.role)) prepareQuestionForm().catch(error => toast(error.message));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -297,6 +311,21 @@ function configureRole() {
   document.querySelectorAll('.operational-link').forEach(link => { link.href = GAS_URL; });
   buildNavigation();
   buildMasterTabs();
+  renderServiceCards();
+  $('#question-form-surface').hidden = !['guru', 'superadmin'].includes(role);
+}
+
+function renderServiceCards() {
+  const container = $('#service-grid');
+  container.replaceChildren();
+  (SERVICE_FEATURES[state.user.role] || []).forEach(([icon, titleText, description]) => {
+    const card = document.createElement('a'); card.className = 'service-card'; card.href = GAS_URL; card.target = '_blank'; card.rel = 'noopener';
+    const mark = document.createElement('span'); mark.textContent = icon;
+    const copy = document.createElement('div'); const title = document.createElement('b'); title.textContent = titleText;
+    const paragraph = document.createElement('p'); paragraph.textContent = description;
+    const action = document.createElement('small'); action.textContent = 'Buka layanan GAS ↗';
+    copy.append(title, paragraph, action); card.append(mark, copy); container.append(card);
+  });
 }
 
 function roleMetrics() {
@@ -422,6 +451,246 @@ async function loadMaster(resource, search = '') {
   createTable($('#master-table'), MASTER_COLUMNS[resource] || [], state.masterItems, 'Data tidak ditemukan.');
 }
 
+const MANAGEMENT_CONFIG = {
+  subjects: {
+    label: 'Mata pelajaran', resource: 'subjects', create: 'REGISTER_MAPEL', update: 'UPDATE_MAPEL', remove: 'DELETE_MAPEL',
+    columns: [{ label: 'Kode', key: 'code' }, { label: 'Mata pelajaran', key: 'name' }, { label: 'Kelompok', key: 'group' }],
+    fields: [
+      { name: 'code', label: 'Kode mapel', required: true, maxLength: 40 },
+      { name: 'name', label: 'Nama mapel', required: true, maxLength: 120 },
+      { name: 'group', label: 'Kelompok', type: 'select', options: [['Umum', 'Umum'], ['Agama', 'Agama'], ['Muatan Lokal', 'Muatan Lokal']] }
+    ]
+  },
+  classes: {
+    label: 'Kelas', resource: 'classes', create: 'REGISTER_KELAS', update: 'UPDATE_KELAS', remove: 'DELETE_KELAS',
+    columns: [{ label: 'Kode', key: 'code' }, { label: 'Nama kelas', key: 'name' }, { label: 'Wali kelas', key: 'homeroom' }, { label: 'Kapasitas', key: 'capacity' }],
+    fields: [
+      { name: 'code', label: 'Kode kelas', required: true, maxLength: 40 },
+      { name: 'name', label: 'Nama kelas', required: true, maxLength: 120 },
+      { name: 'homeroom', label: 'Wali kelas', type: 'select', optionsKey: 'teachers', empty: '-' },
+      { name: 'capacity', label: 'Kapasitas', type: 'number', min: 1, max: 100, defaultValue: '30' }
+    ]
+  },
+  teachers: {
+    label: 'Akun guru', resource: 'teachers', create: 'REGISTER_GURU', update: 'UPDATE_GURU', remove: 'DELETE_GURU',
+    columns: [{ label: 'NIP', key: 'nip' }, { label: 'Username', key: 'username' }, { label: 'Nama guru', key: 'name' }, { label: 'Mapel', key: 'subjects' }, { label: 'Wali kelas', key: 'classCode' }],
+    fields: [
+      { name: 'nip', label: 'NIP', required: true, maxLength: 40 },
+      { name: 'username', label: 'Username', required: true, maxLength: 120 },
+      { name: 'name', label: 'Nama guru', required: true, maxLength: 160 },
+      { name: 'subjects', label: 'Mata pelajaran', required: true, maxLength: 300, placeholder: 'Pisahkan beberapa mapel dengan koma' },
+      { name: 'classCode', label: 'Wali kelas', type: 'select', optionsKey: 'classes', empty: '-' },
+      { name: 'pin', label: 'PIN 6–12 digit', type: 'password', maxLength: 12, createRequired: true, placeholder: 'Kosongkan jika tidak diubah' }
+    ]
+  },
+  student_accounts: {
+    label: 'Akun siswa & orang tua', resource: 'student_accounts', create: 'REGISTER_SISWA', update: 'UPDATE_SISWA', remove: 'DELETE_SISWA',
+    columns: [{ label: 'NIS', key: 'nis' }, { label: 'Nama siswa', key: 'name' }, { label: 'Kelas', key: 'classCode' }, { label: 'Akun siswa', key: 'username' }, { label: 'Akun orang tua', key: 'parentUsername' }, { label: 'Nama orang tua', key: 'parentName' }],
+    fields: [
+      { name: 'nis', label: 'NIS', required: true, maxLength: 40 },
+      { name: 'name', label: 'Nama siswa', required: true, maxLength: 160 },
+      { name: 'classCode', label: 'Kelas', type: 'select', optionsKey: 'classes', required: true },
+      { name: 'username', label: 'Username siswa', required: true, maxLength: 120 },
+      { name: 'parentUsername', label: 'Username orang tua', required: true, maxLength: 120 },
+      { name: 'parentName', label: 'Nama orang tua / wali', required: true, maxLength: 160 },
+      { name: 'pinStudent', label: 'PIN siswa 6–12 digit', type: 'password', maxLength: 12, createRequired: true, placeholder: 'Kosongkan jika tidak diubah' },
+      { name: 'pinParent', label: 'PIN orang tua 6–12 digit', type: 'password', maxLength: 12, createRequired: true, placeholder: 'Kosongkan jika tidak diubah' }
+    ]
+  }
+};
+
+async function nativeAction(action, data) {
+  return api('/api/v1/native/action', { method: 'POST', body: JSON.stringify({ action, data }) });
+}
+
+async function loadFormOptions(force = false) {
+  if (state.formOptions && !force) return state.formOptions;
+  state.formOptions = await api('/api/v1/form-options');
+  return state.formOptions;
+}
+
+function optionPairs(key) {
+  const values = state.formOptions && state.formOptions[key] || [];
+  if (key === 'teachers') return values.map(item => [item.name || item.nip, item.name || item.nip]);
+  return values.map(item => [item.code || item.name, item.name ? `${item.code || ''} — ${item.name}`.replace(/^ — /, '') : item.code]);
+}
+
+function buildManagementTabs() {
+  const tabs = $('#management-tabs');
+  tabs.replaceChildren();
+  Object.entries(MANAGEMENT_CONFIG).forEach(([id, config]) => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'tab-button'; button.dataset.managementResource = id; button.textContent = config.label;
+    button.addEventListener('click', () => loadManagement(id).catch(error => toast(error.message)));
+    tabs.append(button);
+  });
+}
+
+function buildManagementForm() {
+  const config = MANAGEMENT_CONFIG[state.managementResource];
+  const editing = state.managementEditing;
+  $('#management-form-eyebrow').textContent = editing ? 'Ubah data' : 'Data baru';
+  $('#management-form-title').textContent = `${editing ? 'Ubah' : 'Tambah'} ${config.label}`;
+  $('#management-message').textContent = '';
+  const fields = $('#management-form-fields');
+  fields.replaceChildren();
+  config.fields.forEach(field => {
+    const label = document.createElement('label'); label.textContent = field.label;
+    let control;
+    if (field.type === 'select') {
+      control = document.createElement('select');
+      const empty = document.createElement('option'); empty.value = field.empty || ''; empty.textContent = field.empty || 'Pilih…'; control.append(empty);
+      const options = field.options || optionPairs(field.optionsKey);
+      options.forEach(([optionValue, optionLabel]) => {
+        const option = document.createElement('option'); option.value = optionValue; option.textContent = optionLabel; control.append(option);
+      });
+    } else {
+      control = document.createElement('input'); control.type = field.type || 'text';
+    }
+    control.name = field.name;
+    if (field.maxLength) control.maxLength = field.maxLength;
+    if (field.min) control.min = field.min;
+    if (field.max) control.max = field.max;
+    if (field.placeholder) control.placeholder = field.placeholder;
+    control.required = Boolean(field.required || (!editing && field.createRequired));
+    const current = editing && editing[field.name] != null ? editing[field.name] : (field.defaultValue || '');
+    control.value = current;
+    if (control.tagName === 'SELECT' && current && control.value !== String(current)) {
+      const option = document.createElement('option'); option.value = current; option.textContent = current; control.append(option); control.value = current;
+    }
+    label.append(control); fields.append(label);
+  });
+}
+
+function managementValues() {
+  const values = {};
+  $('#management-form').querySelectorAll('[name]').forEach(control => { values[control.name] = control.value.trim(); });
+  return values;
+}
+
+function managementPayload(values) {
+  const editing = state.managementEditing;
+  if (state.managementResource === 'subjects') return { oldKode: editing?.code, kode: values.code, nama: values.name, kelompok: values.group || 'Umum' };
+  if (state.managementResource === 'classes') return { oldKode: editing?.code, kode: values.code, nama: values.name, wali: values.homeroom || '-', kapasitas: Number(values.capacity) || 30 };
+  if (state.managementResource === 'teachers') return { oldNip: editing?.nip, nip: values.nip, username: values.username, nama: values.name, mapel: values.subjects, waliKelas: values.classCode || '-', pin: values.pin || '' };
+  return {
+    oldNis: editing?.nis, nis: values.nis, nama: values.name, kelas: values.classCode,
+    akunSiswa: values.username || values.nis, akunOrtu: values.parentUsername || `ortu.${values.nis}`,
+    namaOrtu: values.parentName || `Wali ${values.name}`, pinSiswa: values.pinStudent || '', pinOrtu: values.pinParent || ''
+  };
+}
+
+function optimisticManagementRow(values) {
+  if (state.managementResource === 'subjects') return { code: values.code, name: values.name, group: values.group || 'Umum' };
+  if (state.managementResource === 'classes') return { code: values.code, name: values.name, homeroom: values.homeroom || '-', capacity: Number(values.capacity) || 30 };
+  if (state.managementResource === 'teachers') return { nip: values.nip, username: values.username, name: values.name, subjects: values.subjects, classCode: values.classCode || '-' };
+  return { nis: values.nis, name: values.name, classCode: values.classCode, username: values.username || values.nis, parentUsername: values.parentUsername || `ortu.${values.nis}`, parentName: values.parentName || `Wali ${values.name}` };
+}
+
+function managementIdentity(row) {
+  if (state.managementResource === 'subjects' || state.managementResource === 'classes') return row.code;
+  if (state.managementResource === 'teachers') return row.nip;
+  return row.nis;
+}
+
+function renderManagementTable(query = '') {
+  const container = $('#management-table'); container.replaceChildren();
+  const config = MANAGEMENT_CONFIG[state.managementResource];
+  const rows = filterRows(state.managementItems, query);
+  if (!rows.length) return container.append(emptyMessage('Data tidak ditemukan.'));
+  const table = document.createElement('table'); table.className = 'data-table';
+  const head = document.createElement('thead'); const headRow = document.createElement('tr');
+  [...config.columns, { label: 'Aksi' }].forEach(column => { const th = document.createElement('th'); th.textContent = column.label; headRow.append(th); });
+  head.append(headRow); const body = document.createElement('tbody');
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    config.columns.forEach(column => { const td = document.createElement('td'); td.textContent = row[column.key] == null || row[column.key] === '' ? '—' : String(row[column.key]); tr.append(td); });
+    const actions = document.createElement('td'); actions.className = 'row-actions';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'small-button'; edit.textContent = 'Ubah'; edit.addEventListener('click', () => startManagementEdit(row));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'small-button danger-button'; remove.textContent = 'Hapus'; remove.addEventListener('click', () => deleteManagementRow(row));
+    actions.append(edit, remove); tr.append(actions); body.append(tr);
+  });
+  table.append(head, body); container.append(table);
+}
+
+function startManagementEdit(row) {
+  state.managementEditing = { ...row };
+  buildManagementForm();
+  $('.management-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetManagementForm() {
+  state.managementEditing = null;
+  buildManagementForm();
+}
+
+async function deleteManagementRow(row) {
+  const config = MANAGEMENT_CONFIG[state.managementResource];
+  const identity = managementIdentity(row);
+  if (!window.confirm(`Nonaktifkan ${config.label} “${identity}”? Riwayat tetap disimpan di PostgreSQL.`)) return;
+  const data = state.managementResource === 'subjects' || state.managementResource === 'classes' ? { kode: identity }
+    : state.managementResource === 'teachers' ? { nip: identity } : { nis: identity };
+  try {
+    const result = await nativeAction(config.remove, data);
+    state.managementItems = state.managementItems.filter(item => managementIdentity(item) !== identity);
+    renderManagementTable($('#management-search').value); resetManagementForm();
+    toast(result.message || 'Data berhasil dinonaktifkan.');
+    scheduleManagementRefresh();
+  } catch (error) { toast(error.message); }
+}
+
+function scheduleManagementRefresh() {
+  state.formOptions = null;
+}
+
+async function loadManagement(resource = state.managementResource, force = false) {
+  state.managementResource = resource;
+  state.managementEditing = null;
+  await loadFormOptions(force);
+  const config = MANAGEMENT_CONFIG[resource];
+  const result = await api(`/api/v1/master/${encodeURIComponent(config.resource)}?limit=200`);
+  state.managementItems = result.items || [];
+  state.managementLoaded = true;
+  document.querySelectorAll('[data-management-resource]').forEach(button => button.classList.toggle('active', button.dataset.managementResource === resource));
+  buildManagementForm(); renderManagementTable($('#management-search').value);
+}
+
+async function prepareManagement() {
+  buildManagementTabs();
+  if (!state.managementLoaded) await loadManagement(state.managementResource);
+}
+
+function newQuestionId() {
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+  const suffix = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 6) : String(Date.now()).slice(-6);
+  return `SOAL-${stamp}-${suffix}`.toUpperCase();
+}
+
+function resetQuestionForm() {
+  $('#question-form').reset();
+  $('#question-id').value = newQuestionId();
+  $('#question-message').textContent = '';
+  updateQuestionType();
+}
+
+function updateQuestionType() {
+  const multipleChoice = ['PG', 'PGK'].includes($('#question-type').value);
+  ['a', 'b', 'c', 'd', 'e'].forEach(letter => { $(`#question-option-${letter}`).closest('label').hidden = !multipleChoice; });
+  $('#question-key').placeholder = multipleChoice ? 'Contoh: A' : 'Jawaban acuan (opsional)';
+}
+
+async function prepareQuestionForm() {
+  const options = await loadFormOptions();
+  const subject = $('#question-subject'); const selectedSubject = subject.value; subject.replaceChildren();
+  (options.subjects || []).forEach(item => { const option = document.createElement('option'); option.value = item.name || item.code; option.textContent = item.name ? `${item.code || ''} — ${item.name}`.replace(/^ — /, '') : item.code; subject.append(option); });
+  const classSelect = $('#question-class'); const selectedClass = classSelect.value; classSelect.replaceChildren();
+  const allClasses = document.createElement('option'); allClasses.value = 'SEMUA'; allClasses.textContent = 'SEMUA — seluruh kelas'; classSelect.append(allClasses);
+  (options.classes || []).forEach(item => { const option = document.createElement('option'); option.value = item.code || item.name; option.textContent = item.name ? `${item.code || ''} — ${item.name}`.replace(/^ — /, '') : item.code; classSelect.append(option); });
+  if (selectedSubject) subject.value = selectedSubject;
+  if (selectedClass) classSelect.value = selectedClass;
+  if (!$('#question-id').value) resetQuestionForm();
+}
+
 function renderAll() {
   $('#school-name').textContent = state.dashboard.appName || 'SISKU';
   configureRole(); renderSummary(); renderOperationalViews(); renderIntegration();
@@ -496,6 +765,62 @@ let masterSearchTimer;
 $('#master-search').addEventListener('input', event => {
   window.clearTimeout(masterSearchTimer);
   masterSearchTimer = window.setTimeout(() => loadMaster(state.masterResource, event.target.value).catch(error => toast(error.message)), 280);
+});
+
+$('#management-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const message = $('#management-message'); const button = $('#management-save');
+  const values = managementValues(); const config = MANAGEMENT_CONFIG[state.managementResource]; const editing = state.managementEditing;
+  message.textContent = '';
+  const pins = [values.pin, values.pinStudent, values.pinParent].filter(Boolean);
+  if (pins.some(pin => !/^\d{6,12}$/.test(pin))) { message.textContent = 'PIN harus terdiri dari 6–12 digit angka.'; return; }
+  button.disabled = true; button.textContent = 'Menyimpan…';
+  try {
+    const result = await nativeAction(editing ? config.update : config.create, managementPayload(values));
+    const nextRow = optimisticManagementRow(values);
+    if (editing) {
+      const oldIdentity = managementIdentity(editing);
+      state.managementItems = state.managementItems.map(item => managementIdentity(item) === oldIdentity ? nextRow : item);
+    } else state.managementItems.unshift(nextRow);
+    renderManagementTable($('#management-search').value); resetManagementForm();
+    toast(result.message || 'Data berhasil disimpan ke PostgreSQL.'); scheduleManagementRefresh();
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; button.textContent = 'Simpan'; }
+});
+
+$('#management-new').addEventListener('click', resetManagementForm);
+$('#management-cancel').addEventListener('click', resetManagementForm);
+$('#management-search').addEventListener('input', event => renderManagementTable(event.target.value));
+
+$('#question-type').addEventListener('change', updateQuestionType);
+$('#question-reset').addEventListener('click', resetQuestionForm);
+$('#question-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const message = $('#question-message'); const button = event.currentTarget.querySelector('button[type="submit"]');
+  const type = $('#question-type').value;
+  const data = {
+    id: $('#question-id').value.trim(), tipeSoal: type, level: $('#question-level').value,
+    mapel: $('#question-subject').value, kelas: $('#question-class').value, kd: $('#question-kd').value.trim(),
+    pertanyaan: $('#question-text').value.trim(), opsiA: $('#question-option-a').value.trim(),
+    opsiB: $('#question-option-b').value.trim(), opsiC: $('#question-option-c').value.trim(),
+    opsiD: $('#question-option-d').value.trim(), opsiE: $('#question-option-e').value.trim(),
+    kunci: $('#question-key').value.trim(), statusApproval: 'Menunggu Approval Kepsek'
+  };
+  message.textContent = '';
+  if (['PG', 'PGK'].includes(type) && (!data.opsiA || !data.opsiB || !data.opsiC || !data.opsiD || !data.kunci)) {
+    message.textContent = 'Pilihan ganda memerlukan opsi A–D dan kunci jawaban.'; return;
+  }
+  button.disabled = true; button.textContent = 'Menyimpan…';
+  try {
+    const result = await nativeAction('SOAL_UAS', data);
+    state.overview.questionStats = state.overview.questionStats || [];
+    const existing = state.overview.questionStats.find(item => item.subject === data.mapel);
+    if (existing) { existing.total += 1; existing.pending += 1; }
+    else state.overview.questionStats.push({ subject: data.mapel, total: 1, approved: 0, pending: 1 });
+    registerTable('question-table', state.overview.questionStats, TABLE_COLUMNS.questions, 'Belum ada statistik soal.');
+    resetQuestionForm(); toast(result.message || 'Soal berhasil disimpan ke PostgreSQL.');
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; button.textContent = 'Simpan soal'; }
 });
 
 $('#change-pin-form').addEventListener('submit', async event => {

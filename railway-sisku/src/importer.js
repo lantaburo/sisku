@@ -130,7 +130,8 @@ async function projectUsers(client, importId, users) {
          student_nis = EXCLUDED.student_nis,
          active = true,
          source_import_id = EXCLUDED.source_import_id,
-         updated_at = now()`,
+         updated_at = now()
+       WHERE app_users.native_managed = false`,
       [id, user.sourceUserId, user.username, user.pinHash, user.role, user.fullName, user.classCode, user.studentNis, importId]
     );
     imported++;
@@ -187,6 +188,7 @@ async function importSnapshot(rawSnapshot, options = {}) {
         `UPDATE app_users
             SET active = false, updated_at = now()
           WHERE source_import_id IS NOT NULL
+            AND native_managed = false
             AND NOT (lower(username) = ANY($1::text[]))`,
         [activeUsernames]
       );

@@ -28,10 +28,20 @@ test('navigasi didefinisikan khusus untuk kelima peran', () => {
 });
 
 test('semua panel navigasi utama tersedia dan tidak memakai tombol menu disabled', () => {
-  for (const panel of ['summary', 'attendance', 'yaumiah', 'tasks', 'grades', 'questions', 'master', 'integration', 'security']) {
+  for (const panel of ['summary', 'attendance', 'yaumiah', 'tasks', 'grades', 'questions', 'management', 'services', 'master', 'integration', 'security']) {
     assert.match(html, new RegExp(`id="${panel}-panel"`));
   }
   assert.doesNotMatch(html, /class="nav-button"[^>]*disabled/);
+});
+
+test('Railway menyediakan pembuatan soal dan CRUD master native PostgreSQL', () => {
+  assert.match(html, /id="question-form"/);
+  assert.match(html, /id="management-form"/);
+  for (const action of ['REGISTER_MAPEL', 'UPDATE_MAPEL', 'DELETE_MAPEL', 'REGISTER_KELAS', 'REGISTER_GURU', 'REGISTER_SISWA', 'SOAL_UAS']) {
+    assert.match(js, new RegExp(action));
+  }
+  assert.match(js, /\/api\/v1\/native\/action/);
+  assert.doesNotMatch(js, /GAS_SESSION_REQUIRED/);
 });
 
 test('aksi operasional diarahkan ke GAS dan data dirender tanpa innerHTML', () => {
