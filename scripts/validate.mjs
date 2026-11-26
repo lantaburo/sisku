@@ -158,6 +158,8 @@ const tokenlessOpenBranch = html.indexOf('countApproved > 0 && sesiMapel.isOpen)
 if (tokenRequiredBranch < 0 || tokenlessOpenBranch < 0 || tokenRequiredBranch > tokenlessOpenBranch) fail('Kolom token siswa wajib diprioritaskan sebelum tombol masuk langsung.');
 if (!/result\.questions = bulkRows\.map/.test(gas)) fail('Simpan bulk harus mengembalikan data soal kanonik.');
 if (!/const creatorUser = payload\.authenticatedUsername/.test(gas)) fail('Pemilik soal bulk harus memakai akun terautentikasi.');
+if (!/put\('sis-session-' \+ token, sessionRaw, 21600\)/.test(gas)) fail('Sesi aktif wajib diperpanjang pada setiap aksi terautentikasi.');
+if (!/Number\(saved\.savedCount\) !== parsedList\.length/.test(html) || !/sisku_bulk_soal_draft_/.test(html)) fail('Impor bulk wajib memverifikasi jumlah tersimpan dan mempertahankan draf.');
 if (!/mapelList: splitGuruMapel\(guruMapel\)/.test(gas)) fail('Sesi impersonasi guru wajib membawa metadata mata pelajaran.');
 if (!/if \(!session\.isOpen\) throw new Error\('Ujian belum dibuka oleh pengawas\.'\)/.test(gas) || !/if \(session\.token && suppliedToken !== session\.token\.toUpperCase\(\)\)/.test(gas)) fail('START_EXAM wajib memeriksa status OPEN dan token secara terpisah.');
 if (!/examResults: examResults/.test(gas)) fail('Backend wajib mengirim rekap nilai yang sudah dibatasi per guru.');

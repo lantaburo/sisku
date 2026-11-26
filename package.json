@@ -5,7 +5,7 @@
   "scripts": {
     "test": "node scripts/validate.mjs",
     "push": "npm test && clasp push",
-    "deploy": "npm test && clasp push && clasp deploy -i AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A -d 'SISKU v2.31 sinkronisasi read-only Railway'",
+    "deploy": "npm test && clasp push && clasp deploy -i AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A -d 'SISKU v2.35 sesi aktif dan impor soal terverifikasi'",
     "deployments": "clasp deployments"
   }
 }

@@ -1,8 +1,8 @@
 // ============================================================================
 // GOOGLE APPS SCRIPT (Code.gs) - SISKU REAL PRODUCTION (2-WAY SYNC)
-// VERSI: v2.31 (26 November 2026) - Sinkronisasi read-only ke Railway
+// VERSI: v2.35 (27 November 2026) - Sesi aktif diperpanjang otomatis
 // ============================================================================
-const APP_VERSION = 'v2.31';
+const APP_VERSION = 'v2.35';
 const FOLDER_PENDUKUNG_ID = '12TiJ3oT3WjJaksD7UfjlU2U18YpkA0bS';
 const FOLDER_SOAL_UAS_ID  = '1_aUdLO6f2Ka5N8jlPAuED_O0K_01x__2';
 const DOC_ACUAN_ID        = '1SvMI5RH3OlsVjRiHZteaMvjWD2TJANdO';
@@ -1254,6 +1254,11 @@ function authorizeClientAction_(payload) {
     : rows.find(r => String(r[1] || '').trim().toLowerCase() === username.trim().toLowerCase());
   const role = userRow ? String(userRow[3] || '').trim().toLowerCase().replace(/[\s_-]+/g, '') : '';
   if (!userRow || !allowedRoles.includes(role)) throw new Error('Aksi ini tidak diizinkan untuk akun Anda.');
+
+  // CacheService membatasi masa token maksimal enam jam. Perpanjang kembali
+  // token setiap ada aktivitas valid agar guru yang bekerja lama di satu tab
+  // tidak kehilangan sesi tepat ketika menyimpan pekerjaan besar.
+  CacheService.getScriptCache().put('sis-session-' + token, sessionRaw, 21600);
 
   // Jangan percaya role atau nama pengguna yang dikirim dari browser.
   payload.actorUsername = String(session.impersonatorUsername || userRow[1]);
