@@ -1,0 +1,16 @@
+# Abaikan folder app/ (Node.js local server, tidak perlu di Apps Script)
+app/
+app/**
+scripts/
+scripts/**
+
+# Abaikan file sistem & package
+package.json
+package-lock.json
+.DS_Store
+node_modules/
+*.log
+*.bak
+*.test
+*.pdf
+*.png

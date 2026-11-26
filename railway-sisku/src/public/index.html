@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123b32">
+  <title>SISKU — Ruang Sekolah Terpadu</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <main id="login-view" class="login-shell">
+    <section class="welcome-panel" aria-labelledby="welcome-title">
+      <div class="brand brand-light">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span><b>SISKU</b><small>Ruang sekolah terpadu</small></span>
+      </div>
+      <div class="welcome-copy">
+        <p class="eyebrow">Versi Railway · tahap fondasi</p>
+        <h1 id="welcome-title">Satu ruang yang lebih tenang untuk aktivitas sekolah.</h1>
+        <p>Data lama tetap dijaga di Spreadsheet. Versi ini tumbuh bertahap, dengan penyimpanan persisten dan pemeriksaan migrasi yang dapat diaudit.</p>
+      </div>
+      <div class="trust-row" aria-label="Prinsip migrasi">
+        <div><span>01</span><p>Tanpa hapus data sumber</p></div>
+        <div><span>02</span><p>Snapshot dengan checksum</p></div>
+        <div><span>03</span><p>Perpindahan per modul</p></div>
+      </div>
+    </section>
+
+    <section class="login-panel" aria-labelledby="login-title">
+      <div class="mobile-brand brand">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span><b>SISKU</b><small>Ruang sekolah terpadu</small></span>
+      </div>
+      <div class="login-card">
+        <p class="eyebrow dark">Selamat datang</p>
+        <h2 id="login-title">Masuk ke SISKU</h2>
+        <p class="muted">Gunakan akun yang sama dengan aplikasi sekolah sebelumnya.</p>
+        <form id="login-form" novalidate>
+          <label for="username">NIS atau username</label>
+          <input id="username" name="username" autocomplete="username" maxlength="120" required placeholder="Contoh: 20260801">
+          <div class="label-row">
+            <label for="pin">PIN akses</label>
+            <button id="toggle-pin" class="text-button" type="button" aria-controls="pin">Tampilkan</button>
+          </div>
+          <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" required placeholder="Masukkan PIN">
+          <div id="login-message" class="form-message" role="alert" aria-live="polite"></div>
+          <button id="login-button" class="primary-button" type="submit">
+            <span>Masuk dengan aman</span><span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <p class="privacy-note"><span aria-hidden="true">●</span> Sesi disimpan aman di server dan berakhir otomatis.</p>
+      </div>
+    </section>
+  </main>
+
+  <main id="dashboard-view" class="dashboard-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand brand-light">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span><b>SISKU</b><small>Railway foundation</small></span>
+      </div>
+      <nav aria-label="Menu utama">
+        <button class="nav-item active" type="button"><span aria-hidden="true">⌂</span> Ringkasan</button>
+        <div class="nav-divider">Modul sekolah</div>
+        <button class="nav-item" type="button" disabled><span aria-hidden="true">◇</span> Data master <small>Segera</small></button>
+        <button class="nav-item" type="button" disabled><span aria-hidden="true">✓</span> Presensi <small>GAS</small></button>
+        <button class="nav-item" type="button" disabled><span aria-hidden="true">✦</span> Yaumiah <small>GAS</small></button>
+        <button class="nav-item" type="button" disabled><span aria-hidden="true">▤</span> Ujian & nilai <small>GAS</small></button>
+      </nav>
+      <div class="sidebar-note"><b>Migrasi aman</b><p>Fitur lama tetap tersedia di aplikasi GAS selama masa transisi.</p></div>
+    </aside>
+
+    <section class="dashboard-main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow dark" id="today-label">Ringkasan sekolah</p>
+          <h1 id="school-name">SISKU</h1>
+        </div>
+        <div class="user-menu">
+          <div class="avatar" id="user-avatar">S</div>
+          <div><b id="user-name">Pengguna</b><small id="user-role">—</small></div>
+          <button id="logout-button" class="logout-button" type="button">Keluar</button>
+        </div>
+      </header>
+
+      <div class="content-wrap">
+        <section class="hero-card">
+          <div>
+            <span class="status-pill"><i></i> Tahap fondasi aktif</span>
+            <h2>Data sekolah sedang disiapkan untuk rumah barunya.</h2>
+            <p>Belum ada data sumber yang dihapus atau dialihkan. Setiap tahap akan diperiksa sebelum fitur dibuka.</p>
+          </div>
+          <div class="migration-ring" aria-label="Tahap 1 dari 5"><b>1<small>/5</small></b><span>tahap</span></div>
+        </section>
+
+        <section class="metric-grid" aria-label="Ringkasan data">
+          <article class="metric-card"><span class="metric-icon green">▦</span><div><p>Snapshot terakhir</p><strong id="snapshot-time">Belum ada</strong><small id="snapshot-source">Menunggu sinkronisasi</small></div></article>
+          <article class="metric-card"><span class="metric-icon gold">≡</span><div><p>Total baris tersalin</p><strong id="total-rows">0</strong><small>Salinan append-only</small></div></article>
+          <article class="metric-card"><span class="metric-icon blue">◎</span><div><p>Akun siap login</p><strong id="total-users">0</strong><small id="role-summary">Belum diproyeksikan</small></div></article>
+          <article class="metric-card"><span class="metric-icon rose">#</span><div><p>Sheet terarsip</p><strong id="total-sheets">0</strong><small>Checksum per sheet</small></div></article>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="surface" aria-labelledby="module-title">
+            <div class="section-heading"><div><p class="eyebrow dark">Peta perpindahan</p><h2 id="module-title">Status setiap modul</h2></div><span class="quiet-badge">Bertahap</span></div>
+            <div id="module-list" class="module-list"></div>
+          </section>
+
+          <section class="surface" aria-labelledby="sheet-title">
+            <div class="section-heading"><div><p class="eyebrow dark">Integritas data</p><h2 id="sheet-title">Isi snapshot</h2></div><span id="checksum-badge" class="quiet-badge">—</span></div>
+            <div id="sheet-list" class="sheet-list"><p class="empty-state">Belum ada snapshot yang diimpor.</p></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

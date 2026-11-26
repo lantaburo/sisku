@@ -1,0 +1,13 @@
+{
+  "name": "sis-terpadu",
+  "version": "2.22.0",
+  "description": "SIS-Terpadu - Sistem Informasi Sekolah Terpadu (Monitoring Yaumiah, Presensi QR+GPS & Akademik)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["sekolah", "presensi", "yaumiah", "akademik"],
+  "license": "MIT"
+}
+

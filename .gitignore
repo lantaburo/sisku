@@ -1,0 +1,29 @@
+# Dependency dan hasil build
+node_modules/
+**/node_modules/
+coverage/
+dist/
+
+# Rahasia dan konfigurasi mesin lokal
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Snapshot migrasi mengandung data sekolah
+snapshots/
+**/snapshots/
+*.snapshot.json
+
+# File sementara
+.DS_Store
+*.log
+*.bak
+*.tmp
+*.test
+*.pdf
+
+# IDE
+.idea/
+.vscode/
