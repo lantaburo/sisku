@@ -46,6 +46,8 @@ test('Railway menyediakan pembuatan soal dan CRUD master native PostgreSQL', () 
 });
 
 test('form tambah soal dan seluruh aksi ubah utama memakai popup', () => {
+  assert.match(html, /assets\/app\.js\?v=2\.37/);
+  assert.match(html, /assets\/styles\.css\?v=2\.37/);
   assert.match(html, /id="question-new"[^>]*>\+ Tambah soal</);
   assert.match(html, /id="question-form-surface"[^>]*hidden/);
   assert.match(html, /id="editor-dialog"/);
