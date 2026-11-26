@@ -10,10 +10,13 @@ const { getPool, closePool } = require('./db');
 const { verifyPin, hashPin, createSessionToken, parseCookies, sha256 } = require('./security');
 
 const config = getConfig();
-const pool = getPool();
 const app = express();
 const publicDir = path.join(__dirname, 'public');
 const cookieName = config.production ? '__Host-sisku_session' : 'sisku_session';
+
+function db() {
+  return getPool();
+}
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -77,7 +80,7 @@ function clearSessionCookie(res) {
 async function sessionUser(req) {
   const token = parseCookies(req.headers.cookie)[cookieName];
   if (!token) return null;
-  const result = await pool.query(
+  const result = await db().query(
     `SELECT u.id, u.username, u.role, u.full_name, u.class_code, u.student_nis, s.id AS session_id
        FROM user_sessions s
        JOIN app_users u ON u.id = s.user_id
@@ -86,7 +89,7 @@ async function sessionUser(req) {
     [sha256(token)]
   );
   if (!result.rowCount) return null;
-  pool.query('UPDATE user_sessions SET last_seen_at = now() WHERE id = $1', [result.rows[0].session_id]).catch(() => {});
+  db().query('UPDATE user_sessions SET last_seen_at = now() WHERE id = $1', [result.rows[0].session_id]).catch(() => {});
   return result.rows[0];
 }
 
@@ -103,7 +106,7 @@ async function requireAuth(req, res, next) {
 app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/ready', async (req, res) => {
   try {
-    await pool.query("SELECT 1 FROM schema_migrations WHERE version = '001_initial.sql'");
+    await db().query("SELECT 1 FROM schema_migrations WHERE version = '001_initial.sql'");
     res.json({ status: 'ready' });
   } catch (_) {
     res.status(503).json({ status: 'not_ready' });
@@ -117,7 +120,7 @@ app.post('/api/v1/auth/login', sameOrigin, loginLimiter, async (req, res, next) 
     if (!username || username.length > 120 || !pin || pin.length > 64) {
       return res.status(400).json({ status: 'error', message: 'NIS / Username dan PIN wajib diisi.' });
     }
-    const result = await pool.query(
+    const result = await db().query(
       `SELECT id, username, pin_hash, role, full_name, class_code, student_nis
          FROM app_users
         WHERE active = true
@@ -134,18 +137,18 @@ app.post('/api/v1/auth/login', sameOrigin, loginLimiter, async (req, res, next) 
 
     if (verification.needsUpgrade) {
       const upgraded = await hashPin(pin);
-      await pool.query(
+      await db().query(
         'UPDATE app_users SET pin_hash = $1, pin_upgraded_at = now(), updated_at = now() WHERE id = $2',
         [upgraded, user.id]
       );
     }
     const session = createSessionToken();
     const expiresAt = new Date(Date.now() + config.sessionHours * 60 * 60 * 1000);
-    await pool.query(
+    await db().query(
       'INSERT INTO user_sessions(id, user_id, token_hash, expires_at) VALUES ($1,$2,$3,$4)',
       [crypto.randomUUID(), user.id, session.tokenHash, expiresAt]
     );
-    await pool.query(
+    await db().query(
       `INSERT INTO audit_log(actor_user_id, action, entity_type, entity_id)
        VALUES ($1, 'LOGIN', 'user', $2)`,
       [user.id, user.id]
@@ -175,8 +178,8 @@ app.get('/api/v1/auth/me', requireAuth, (req, res) => {
 
 app.post('/api/v1/auth/logout', sameOrigin, requireAuth, async (req, res, next) => {
   try {
-    await pool.query('UPDATE user_sessions SET revoked_at = now() WHERE id = $1', [req.user.session_id]);
-    await pool.query(
+    await db().query('UPDATE user_sessions SET revoked_at = now() WHERE id = $1', [req.user.session_id]);
+    await db().query(
       `INSERT INTO audit_log(actor_user_id, action, entity_type, entity_id)
        VALUES ($1, 'LOGOUT', 'user', $2)`,
       [req.user.id, req.user.id]
@@ -190,7 +193,7 @@ app.post('/api/v1/auth/logout', sameOrigin, requireAuth, async (req, res, next) 
 
 app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
   try {
-    const latest = await pool.query(
+    const latest = await db().query(
       `SELECT id, source_exported_at, imported_at, sheet_count, row_count, snapshot_checksum
          FROM import_batches WHERE status = 'completed' ORDER BY imported_at DESC LIMIT 1`
     );
@@ -200,12 +203,12 @@ app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
     if (latest.rowCount) {
       const importId = latest.rows[0].id;
       const [sheetResult, roleResult, orgResult] = await Promise.all([
-        pool.query(
+        db().query(
           'SELECT sheet_name AS name, row_count AS count FROM import_sheets WHERE import_id = $1 ORDER BY sheet_name',
           [importId]
         ),
-        pool.query('SELECT role, count(*)::int AS count FROM app_users WHERE active = true GROUP BY role ORDER BY role'),
-        pool.query(
+        db().query('SELECT role, count(*)::int AS count FROM app_users WHERE active = true GROUP BY role ORDER BY role'),
+        db().query(
           `SELECT row_values ->> 0 AS key, row_values ->> 1 AS value
              FROM legacy_sheet_rows
             WHERE import_id = $1 AND lower(sheet_name) = lower('Pengaturan_Organisasi')`,

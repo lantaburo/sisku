@@ -1,0 +1,10 @@
+**
+!railway-sisku/
+!railway-sisku/package.json
+!railway-sisku/package-lock.json
+!railway-sisku/migrations/
+!railway-sisku/migrations/**
+!railway-sisku/src/
+!railway-sisku/src/**
+!railway-sisku/scripts/
+!railway-sisku/scripts/**

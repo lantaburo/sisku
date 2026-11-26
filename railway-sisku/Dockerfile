@@ -14,4 +14,4 @@ COPY src ./src
 COPY scripts ./scripts
 USER sisku
 EXPOSE 3000
-CMD ["node", "src/server.js"]
+CMD ["node", "src/start.js"]
