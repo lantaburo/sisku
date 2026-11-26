@@ -29,3 +29,15 @@ test('layanan operasional native mengikuti peran', () => {
   assert.equal(actionAllowed('ortu', 'SEND_ADMIN_MESSAGE'), true);
   assert.equal(actionAllowed('siswa', 'SEND_ANNOUNCEMENT'), false);
 });
+
+test('alur paritas GAS dibatasi sesuai peran', () => {
+  assert.equal(actionAllowed('guru', 'SOAL_UAS_BULK'), true);
+  assert.equal(actionAllowed('kepsek', 'BULK_APPROVE_SOAL'), true);
+  assert.equal(actionAllowed('siswa', 'UPDATE_TUGAS_STATUS'), true);
+  assert.equal(actionAllowed('siswa', 'SUBMIT_GRADE_COMPLAINT'), true);
+  assert.equal(actionAllowed('ortu', 'SUBMIT_GRADE_COMPLAINT'), true);
+  assert.equal(actionAllowed('guru', 'RESOLVE_GRADE_COMPLAINT'), true);
+  assert.equal(actionAllowed('guru', 'GRADE_ESSAY'), true);
+  assert.equal(actionAllowed('superadmin', 'SAVE_ATTENDANCE_SETTINGS'), true);
+  assert.equal(actionAllowed('siswa', 'RESOLVE_GRADE_COMPLAINT'), false);
+});

@@ -42,7 +42,7 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc: ["'self'", 'data:'],
+      imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"]
@@ -50,7 +50,7 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false
 }));
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '2mb' }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -92,10 +92,14 @@ async function sessionUser(req) {
   const token = parseCookies(req.headers.cookie)[cookieName];
   if (!token) return null;
   const result = await db().query(
-    `SELECT u.id, u.username, u.role, u.full_name, u.class_code, u.student_nis,
-            s.id AS session_id
+    `SELECT coalesce(i.id, u.id) AS id, coalesce(i.username, u.username) AS username,
+            coalesce(i.role, u.role) AS role, coalesce(i.full_name, u.full_name) AS full_name,
+            coalesce(i.class_code, u.class_code) AS class_code, coalesce(i.student_nis, u.student_nis) AS student_nis,
+            u.id AS actor_user_id, u.username AS actor_username, u.role AS actor_role,
+            (i.id IS NOT NULL) AS is_impersonating, s.id AS session_id
        FROM user_sessions s
        JOIN app_users u ON u.id = s.user_id
+       LEFT JOIN app_users i ON i.id = s.impersonated_user_id AND i.active = true
       WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.active = true
       LIMIT 1`,
     [sha256(token)]
@@ -122,6 +126,11 @@ function requireRoles(...roles) {
     }
     next();
   };
+}
+
+function requireNotImpersonating(req, res, next) {
+  if (req.user && req.user.is_impersonating) return res.status(403).json({ status: 'error', message: 'Aksi perubahan tidak tersedia saat mode impersonasi. Kembali ke akun superadmin terlebih dahulu.' });
+  next();
 }
 
 function number(valueToParse) {
@@ -240,7 +249,9 @@ app.get('/api/v1/auth/me', async (req, res, next) => {
         role: user.role,
         name: user.full_name,
         classCode: user.class_code,
-        nis: user.student_nis
+        nis: user.student_nis,
+        isImpersonating: user.is_impersonating,
+        impersonatorUsername: user.is_impersonating ? user.actor_username : ''
       }
     });
   } catch (error) {
@@ -248,7 +259,7 @@ app.get('/api/v1/auth/me', async (req, res, next) => {
   }
 });
 
-app.post('/api/v1/native/action', sameOrigin, requireAuth, async (req, res) => {
+app.post('/api/v1/native/action', sameOrigin, requireAuth, requireNotImpersonating, async (req, res) => {
   const action = String(req.body && req.body.action || '').trim().toUpperCase();
   const data = req.body && req.body.data;
   if (!actionAllowed(req.user.role, action)) {
@@ -266,6 +277,29 @@ app.post('/api/v1/native/action', sameOrigin, requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/v1/admin/impersonate', sameOrigin, requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.actor_role !== 'superadmin' || req.user.is_impersonating) return res.status(403).json({ status: 'error', message: 'Impersonasi hanya tersedia dari akun superadmin utama.' });
+    const username = String(req.body && req.body.username || '').trim().toLowerCase();
+    const target = await db().query("SELECT id, username, role, full_name, class_code, student_nis FROM app_users WHERE lower(username) = $1 AND active = true AND role <> 'superadmin'", [username]);
+    if (!target.rowCount) return res.status(404).json({ status: 'error', message: 'Akun target tidak ditemukan atau tidak dapat diimpersonasi.' });
+    await db().query('UPDATE user_sessions SET impersonated_user_id = $1 WHERE id = $2', [target.rows[0].id, req.user.session_id]);
+    await db().query(`INSERT INTO audit_log(actor_user_id, action, entity_type, entity_id, details) VALUES ($1,'IMPERSONATE_START','user',$2,$3::jsonb)`, [req.user.actor_user_id, target.rows[0].id, JSON.stringify({ username: target.rows[0].username })]);
+    res.json({ status: 'ok', user: { username: target.rows[0].username, role: target.rows[0].role, name: target.rows[0].full_name, classCode: target.rows[0].class_code, nis: target.rows[0].student_nis, isImpersonating: true, impersonatorUsername: req.user.actor_username } });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/v1/admin/impersonate/stop', sameOrigin, requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.actor_role !== 'superadmin') return res.status(403).json({ status: 'error', message: 'Sesi superadmin tidak ditemukan.' });
+    await db().query('UPDATE user_sessions SET impersonated_user_id = NULL WHERE id = $1', [req.user.session_id]);
+    await db().query(`INSERT INTO audit_log(actor_user_id, action, entity_type, entity_id) VALUES ($1,'IMPERSONATE_STOP','user_session',$2)`, [req.user.actor_user_id, req.user.session_id]);
+    const actor = await db().query('SELECT username, role, full_name, class_code, student_nis FROM app_users WHERE id = $1', [req.user.actor_user_id]);
+    const user = actor.rows[0];
+    res.json({ status: 'ok', user: { username: user.username, role: user.role, name: user.full_name, classCode: user.class_code, nis: user.student_nis, isImpersonating: false } });
+  } catch (error) { next(error); }
+});
+
 app.post('/api/v1/auth/logout', sameOrigin, requireAuth, async (req, res, next) => {
   try {
     await db().query('UPDATE user_sessions SET revoked_at = now() WHERE id = $1', [req.user.session_id]);
@@ -281,7 +315,7 @@ app.post('/api/v1/auth/logout', sameOrigin, requireAuth, async (req, res, next) 
   }
 });
 
-app.post('/api/v1/auth/change-pin', sameOrigin, requireAuth, async (req, res, next) => {
+app.post('/api/v1/auth/change-pin', sameOrigin, requireAuth, requireNotImpersonating, async (req, res, next) => {
   try {
     const currentPin = String(req.body && req.body.currentPin || '').trim();
     const newPin = String(req.body && req.body.newPin || '').trim();
@@ -447,9 +481,18 @@ app.get('/api/v1/overview', requireAuth, async (req, res, next) => {
       title: normalized(value(row, 'Judul')),
       subject: normalized(value(row, 'Mapel')),
       classCode: normalized(value(row, 'Kelas')),
+      description: normalized(value(row, 'Deskripsi')),
       deadline: normalized(value(row, 'Deadline')),
       status: normalized(value(row, 'Status')) || 'Aktif'
     }));
+    if (isFamily && nis) {
+      const submissions = await db().query('SELECT task_id,status,submitted_at FROM native_task_submissions WHERE student_nis=$1', [nis]);
+      const submissionByTask = new Map(submissions.rows.map(row => [row.task_id, row]));
+      taskList.forEach(task => {
+        const submission = submissionByTask.get(task.id);
+        if (submission) { task.submissionStatus = submission.status; task.submittedAt = submission.submitted_at; }
+      });
+    }
     const achievementList = byNewest(visibleAchievements, ['Timestamp']).slice(0, 100).map(row => ({
       date: schoolDate(value(row, 'Timestamp')),
       nis: normalized(value(row, 'NIS')),
@@ -612,7 +655,7 @@ app.get('/api/v1/questions', requireAuth, requireRoles('superadmin', 'kepsek', '
     const result = await db().query(
       `SELECT id, subject, class_code, cognitive_level, competency, question_text, options,
               answer_key, approval_status, question_type, revision_note, image_url,
-              creator_username, created_at, updated_at
+              creator_username, package_id, created_at, updated_at
          FROM school_questions
         WHERE active = true ${ownerClause}
         ORDER BY updated_at DESC, id
@@ -628,7 +671,7 @@ app.get('/api/v1/questions', requireAuth, requireRoles('superadmin', 'kepsek', '
         question: row.question_text, options: row.options || {}, answerKey: row.answer_key,
         status: row.approval_status, type: row.question_type,
         revisionNote: row.revision_note, imageUrl: row.image_url,
-        creator: row.creator_username, updatedAt: row.updated_at
+        creator: row.creator_username, packageId: row.package_id, updatedAt: row.updated_at
       }))
     });
   } catch (error) {
@@ -647,7 +690,7 @@ app.get('/api/v1/exams', requireAuth, async (req, res, next) => {
       return res.json({ status: 'ok', items: [] });
     }
     const result = await db().query(
-      `SELECT s.id, s.subject, s.class_code, s.note, s.status, s.opened_at, s.updated_at,
+      `SELECT s.id, s.subject, s.class_code, s.note, s.status, s.opened_at, s.updated_at, s.access_token,
               count(q.id)::int AS question_count
          FROM native_exam_sessions s
          LEFT JOIN school_questions q ON q.active = true AND q.approval_status = 'Approved'
@@ -656,11 +699,11 @@ app.get('/api/v1/exams', requireAuth, async (req, res, next) => {
         GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100`,
       params
     );
-    res.json({ status: 'ok', items: result.rows.map(row => ({ id: row.id, subject: row.subject, classCode: row.class_code, note: row.note, status: row.status, questionCount: row.question_count, openedAt: row.opened_at })) });
+    res.json({ status: 'ok', items: result.rows.map(row => ({ id: row.id, subject: row.subject, classCode: row.class_code, note: row.note, status: row.status, questionCount: row.question_count, openedAt: row.opened_at, requiresToken: Boolean(row.access_token), accessToken: req.user.role === 'siswa' ? undefined : row.access_token })) });
   } catch (error) { next(error); }
 });
 
-app.post('/api/v1/exams/:id/start', sameOrigin, requireAuth, requireRoles('siswa'), async (req, res, next) => {
+app.post('/api/v1/exams/:id/start', sameOrigin, requireAuth, requireRoles('siswa'), requireNotImpersonating, async (req, res, next) => {
   const client = await db().connect();
   try {
     await client.query('BEGIN');
@@ -668,9 +711,11 @@ app.post('/api/v1/exams/:id/start', sameOrigin, requireAuth, requireRoles('siswa
     if (!session.rowCount) throw httpError(404, 'Sesi ujian tidak aktif.');
     const exam = session.rows[0];
     if (exam.class_code !== 'SEMUA' && exam.class_code !== req.user.class_code) throw httpError(403, 'Sesi ujian bukan untuk kelas Anda.');
-    const existing = await client.query('SELECT id, status, question_manifest FROM native_exam_attempts WHERE session_id = $1 AND user_id = $2', [exam.id, req.user.id]);
+    if (exam.access_token && String(req.body && req.body.token || '').trim().toUpperCase() !== String(exam.access_token).toUpperCase()) throw httpError(403, 'Token ujian tidak sesuai.');
+    const existing = await client.query('SELECT id, status, question_manifest, option_manifest FROM native_exam_attempts WHERE session_id = $1 AND user_id = $2', [exam.id, req.user.id]);
     if (existing.rowCount && existing.rows[0].status === 'SUBMITTED') throw httpError(409, 'Ujian ini sudah pernah dikumpulkan.');
     let manifest = existing.rows[0] && existing.rows[0].question_manifest;
+    let optionManifest = existing.rows[0]?.option_manifest || {};
     let attemptId = existing.rows[0] && existing.rows[0].id;
     if (!manifest) {
       const questions = await client.query(
@@ -692,7 +737,21 @@ app.post('/api/v1/exams/:id/start', sameOrigin, requireAuth, requireRoles('siswa
       [manifest]
     );
     const lookup = new Map(questionResult.rows.map(row => [row.id, row]));
-    const questions = manifest.map(id => lookup.get(id)).filter(Boolean).map(row => ({ id: row.id, question: row.question_text, options: row.options || {}, type: row.question_type, imageUrl: row.image_url }));
+    let optionManifestChanged = false;
+    const questions = manifest.map(id => lookup.get(id)).filter(Boolean).map(row => {
+      const original = row.options || {}; let options = original;
+      if (exam.shuffle_options && ['PG', 'PGK'].includes(String(row.question_type).toUpperCase())) {
+        let mapping = optionManifest[row.id];
+        if (!mapping) {
+          const originalKeys = Object.keys(original).filter(key => original[key]);
+          for (let i = originalKeys.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [originalKeys[i], originalKeys[j]] = [originalKeys[j], originalKeys[i]]; }
+          mapping = Object.fromEntries(originalKeys.map((originalKey, index) => [String.fromCharCode(65 + index), originalKey])); optionManifest[row.id] = mapping; optionManifestChanged = true;
+        }
+        options = Object.fromEntries(Object.entries(mapping).map(([displayKey, originalKey]) => [displayKey, original[originalKey]]).filter(([, value]) => value));
+      }
+      return { id: row.id, question: row.question_text, options, type: row.question_type, imageUrl: row.image_url };
+    });
+    if (optionManifestChanged) await client.query('UPDATE native_exam_attempts SET option_manifest=$1::jsonb WHERE id=$2', [JSON.stringify(optionManifest), attemptId]);
     await client.query('COMMIT');
     res.json({ status: 'ok', attemptId, session: { id: exam.id, subject: exam.subject, classCode: exam.class_code, note: exam.note }, questions });
   } catch (error) {
@@ -702,7 +761,7 @@ app.post('/api/v1/exams/:id/start', sameOrigin, requireAuth, requireRoles('siswa
   } finally { client.release(); }
 });
 
-app.post('/api/v1/exams/:id/submit', sameOrigin, requireAuth, requireRoles('siswa'), async (req, res, next) => {
+app.post('/api/v1/exams/:id/submit', sameOrigin, requireAuth, requireRoles('siswa'), requireNotImpersonating, async (req, res, next) => {
   const client = await db().connect();
   try {
     await client.query('BEGIN');
@@ -717,7 +776,9 @@ app.post('/api/v1/exams/:id/submit', sameOrigin, requireAuth, requireRoles('sisw
     questions.rows.forEach(question => {
       if (String(question.question_type).toUpperCase() === 'ESAI') { hasEssay = true; return; }
       objectiveTotal++;
-      if (canonical(answers[question.id]) === canonical(question.answer_key)) correct++;
+      const mapping = attempt.rows[0].option_manifest?.[question.id] || {};
+      const translated = String(answers[question.id] || '').split(/[,;|\s]+/).filter(Boolean).map(key => mapping[key] || key).join(',');
+      if (canonical(translated) === canonical(question.answer_key)) correct++;
     });
     const score = objectiveTotal ? Math.round((correct / objectiveTotal) * 10000) / 100 : 0;
     await client.query(
@@ -732,6 +793,95 @@ app.post('/api/v1/exams/:id/submit', sameOrigin, requireAuth, requireRoles('sisw
     if (error.status) return res.status(error.status).json({ status: 'error', message: error.message });
     next(error);
   } finally { client.release(); }
+});
+
+app.get('/api/v1/attempts', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db().query(
+      `SELECT a.id,a.student_nis,a.student_name,a.class_code,a.subject,a.score,a.status,a.started_at,a.submitted_at,
+              a.question_manifest,a.answers,a.essay_scores,a.grading_note,
+              c.id AS complaint_id,c.status AS complaint_status,c.argument,c.teacher_response,c.score_after
+         FROM native_exam_attempts a
+         LEFT JOIN native_grade_complaints c ON c.attempt_id=a.id AND c.student_nis=a.student_nis
+        WHERE a.status='SUBMITTED' ORDER BY a.submitted_at DESC LIMIT 1000`
+    );
+    let rows = result.rows;
+    if (['siswa', 'ortu'].includes(req.user.role)) {
+      const nis = req.user.student_nis || req.user.username;
+      rows = rows.filter(row => row.student_nis === nis);
+    } else if (req.user.role === 'guru') {
+      const profile = await db().query('SELECT subjects FROM teacher_profiles WHERE user_id=$1 AND active=true', [req.user.id]);
+      const tokens = String(profile.rows[0]?.subjects || '').split(/[;,|\n]+/).map(item => item.trim().toLowerCase()).filter(Boolean);
+      const subjects = await db().query('SELECT code,name FROM school_subjects WHERE active=true');
+      const allowed = new Set(tokens);
+      subjects.rows.forEach(subject => {
+        if (allowed.has(subject.code.toLowerCase()) || allowed.has(subject.name.toLowerCase())) { allowed.add(subject.code.toLowerCase()); allowed.add(subject.name.toLowerCase()); }
+      });
+      rows = rows.filter(row => allowed.has(String(row.subject).toLowerCase()));
+    } else if (!['superadmin', 'kepsek'].includes(req.user.role)) rows = [];
+    const canGrade = ['guru', 'superadmin'].includes(req.user.role);
+    res.json({ status: 'ok', items: rows.map(row => ({
+      id: row.id, studentNis: row.student_nis, studentName: row.student_name, classCode: row.class_code,
+      subject: row.subject, score: Number(row.score), status: row.status, submittedAt: row.submitted_at,
+      gradingNote: row.grading_note, canGrade,
+      questionManifest: canGrade ? row.question_manifest : undefined,
+      answers: canGrade ? row.answers : undefined, essayScores: canGrade ? row.essay_scores : undefined,
+      complaint: row.complaint_id ? { id: row.complaint_id, status: row.complaint_status, argument: row.argument, response: row.teacher_response, scoreAfter: row.score_after == null ? null : Number(row.score_after) } : null
+    })) });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/v1/attempts/:id/essay', requireAuth, requireRoles('guru', 'superadmin'), async (req, res, next) => {
+  try {
+    const attempt = await db().query("SELECT id,subject,student_name,student_nis,question_manifest,answers,essay_scores FROM native_exam_attempts WHERE id=$1 AND status='SUBMITTED'", [req.params.id]);
+    if (!attempt.rowCount) return res.status(404).json({ status: 'error', message: 'Attempt ujian tidak ditemukan.' });
+    if (req.user.role === 'guru') {
+      const profile = await db().query('SELECT subjects FROM teacher_profiles WHERE user_id=$1 AND active=true', [req.user.id]);
+      const tokens = String(profile.rows[0]?.subjects || '').split(/[;,|\n]+/).map(valueToNormalize => valueToNormalize.trim().toLowerCase());
+      const subject = await db().query('SELECT code,name FROM school_subjects WHERE lower(code)=lower($1) OR lower(name)=lower($1) LIMIT 1', [attempt.rows[0].subject]);
+      const matched = subject.rowCount && (tokens.includes(subject.rows[0].code.toLowerCase()) || tokens.includes(subject.rows[0].name.toLowerCase()));
+      if (!matched) return res.status(403).json({ status: 'error', message: 'Attempt ini bukan mata pelajaran yang Anda ampu.' });
+    }
+    const questions = await db().query("SELECT id,question_text FROM school_questions WHERE id=ANY($1::text[]) AND upper(question_type)='ESAI'", [attempt.rows[0].question_manifest]);
+    res.json({ status: 'ok', attempt: { id: attempt.rows[0].id, subject: attempt.rows[0].subject, studentName: attempt.rows[0].student_name, studentNis: attempt.rows[0].student_nis }, questions: questions.rows.map(row => ({ id: row.id, question: row.question_text, answer: attempt.rows[0].answers?.[row.id] || '', score: Number(attempt.rows[0].essay_scores?.[row.id] || 0) })) });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/v1/yaumiah/config', requireAuth, async (req, res, next) => {
+  try {
+    const classCode = req.user.class_code || '';
+    const [items, targets] = await Promise.all([
+      db().query("SELECT id,name,category,points,class_code FROM native_yaumiah_master WHERE active=true AND (class_code='SEMUA' OR class_code=$1) ORDER BY category,name", [classCode]),
+      db().query("SELECT class_code,teacher_name,surah,verses,period,updated_at FROM native_tahfidz_targets WHERE class_code=$1 OR $2", [classCode, ['superadmin', 'kepsek'].includes(req.user.role)])
+    ]);
+    res.json({ status: 'ok', items: items.rows, targets: targets.rows });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/v1/admin/activity', requireAuth, requireRoles('superadmin'), async (req, res, next) => {
+  try {
+    const username = String(req.query.username || '').trim().toLowerCase();
+    const params = []; let where = '';
+    if (username) { params.push(username); where = "WHERE lower(coalesce(u.username,''))=$1 OR lower(coalesce(a.details->>'username',''))=$1 OR lower(coalesce(a.details->>'targetUsername',''))=$1 OR lower(coalesce(a.details->>'actorUsername',''))=$1"; }
+    const result = await db().query(`SELECT a.occurred_at,a.action,a.entity_type,a.entity_id,a.details,u.username,u.full_name FROM audit_log a LEFT JOIN app_users u ON u.id=a.actor_user_id ${where} ORDER BY a.occurred_at DESC LIMIT 500`, params);
+    res.json({ status: 'ok', items: result.rows });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/v1/organization', requireAuth, async (_req, res, next) => {
+  try {
+    const result = await db().query("SELECT setting_value FROM runtime_settings WHERE setting_key='organization'");
+    res.json({ status: 'ok', settings: result.rows[0]?.setting_value || {} });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/v1/attendance/config', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db().query("SELECT setting_value FROM runtime_settings WHERE setting_key='attendance'");
+    const settings = result.rows[0]?.setting_value || {};
+    const enabled = settings.schoolLatitude != null && settings.schoolLongitude != null && Boolean(settings.qrTokenMasuk);
+    res.json({ status: 'ok', enabled, settings: req.user.role === 'superadmin' ? settings : { radiusM: settings.radiusM || null } });
+  } catch (error) { next(error); }
 });
 
 app.get('/api/v1/messages', requireAuth, requireRoles('superadmin'), async (req, res, next) => {

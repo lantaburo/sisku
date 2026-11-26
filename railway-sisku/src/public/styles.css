@@ -100,6 +100,19 @@ label { display: block; margin: 0 0 8px; color: var(--slate-700); font-size: .87
 .profile-strip p { color: var(--emerald-700); font-size: .75rem; font-weight: 800; }
 .profile-strip h1 { margin: 2px 0 3px; font-size: 1.2rem; letter-spacing: -.025em; }
 .profile-strip span { color: var(--slate-500); font-size: .78rem; }
+.impersonation-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 18px; padding: 14px 18px; border: 1px solid #f59e0b; border-radius: 18px; background: #fffbeb; color: #78350f; box-shadow: 0 10px 25px rgba(146,64,14,.08); }
+.impersonation-banner[hidden] { display: none; }
+.impersonation-banner div { display: grid; gap: 2px; }
+.impersonation-banner span { font-size: .75rem; }
+.bulk-surface summary { display: flex; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.bulk-surface summary span, .field-hint { color: var(--slate-500); font-size: .75rem; }
+.bulk-surface[open] summary { margin-bottom: 18px; }
+.attempt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.attempt-card-copy { display: grid; gap: 4px; }
+.attempt-card-copy small { color: var(--slate-500); }
+.check-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.check-item { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--slate-50); font-size: .8rem; font-weight: 700; }
+.question-image { display: block; max-width: min(100%,560px); max-height: 360px; margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; object-fit: contain; }
 .profile-date { display: grid; gap: 1px; text-align: right; }
 .profile-date b { color: var(--slate-700); font-size: .88rem; }
 .profile-date span { font-size: .72rem; }

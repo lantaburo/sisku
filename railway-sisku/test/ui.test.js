@@ -55,3 +55,12 @@ test('aksi operasional berjalan native tanpa tautan kerja ke GAS', () => {
   assert.match(html, /id="communication-form"/);
   assert.doesNotMatch(js, /\.innerHTML\s*=/);
 });
+
+test('UI menyediakan flow token, impersonasi, komplain, bulk, dan penilaian', () => {
+  for (const id of ['impersonation-banner', 'exam-token', 'attempt-list', 'bulk-question-form', 'bulk-master-form', 'yaumiah-master-form', 'attendance-settings-form']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  for (const flow of ['admin/impersonate', 'SUBMIT_GRADE_COMPLAINT', 'RESOLVE_GRADE_COMPLAINT', 'SOAL_UAS_BULK', 'GRADE_ESSAY', 'UPDATE_TUGAS_STATUS']) {
+    assert.match(js, new RegExp(flow));
+  }
+});
