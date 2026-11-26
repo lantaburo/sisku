@@ -91,6 +91,8 @@ input::placeholder { color: #a0aba7; }
 .status-pill i { width: 7px; height: 7px; border-radius: 50%; background: #7ed4ad; box-shadow: 0 0 0 4px rgba(126,212,173,.12); }
 .hero-card h2 { margin: 20px 0 10px; font-family: Georgia, serif; font-size: clamp(1.8rem, 3.4vw, 3rem); font-weight: 500; line-height: 1.08; letter-spacing: -.03em; }
 .hero-card p { max-width: 620px; margin: 0; color: rgba(255,255,255,.62); font-size: .84rem; line-height: 1.65; }
+.hero-card .primary-button { width: auto; min-height: 42px; margin-top: 20px; gap: 28px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.16); box-shadow: none; }
+.hero-card .primary-button:hover { background: rgba(255,255,255,.22); }
 .migration-ring { position: relative; z-index: 1; flex: 0 0 118px; height: 118px; display: grid; place-content: center; text-align: center; border: 1px solid rgba(255,255,255,.22); border-radius: 50%; box-shadow: inset 0 0 0 9px rgba(255,255,255,.035); }
 .migration-ring b { font-family: Georgia, serif; font-size: 2.3rem; font-weight: 400; line-height: 1; }
 .migration-ring b small { color: rgba(255,255,255,.45); font-size: .95rem; }

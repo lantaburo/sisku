@@ -1,6 +1,6 @@
 {
   "name": "sisku-railway",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Fondasi produksi SISKU di Railway dengan PostgreSQL dan migrasi aman dari Google Sheets",
   "engines": {
@@ -12,8 +12,9 @@
     "db:migrate": "node src/migrate.js",
     "import": "node scripts/import-snapshot.js",
     "sync:google": "node scripts/sync-google-sheet.js",
+    "sync:gas": "node scripts/sync-gas-webapp.js",
     "test": "node --test",
-    "check": "node --check src/start.js && node --check src/server.js && node --check src/importer.js && node --check src/snapshot.js && node --check src/public/app.js && node --check scripts/sync-google-sheet.js && npm test"
+    "check": "node --check src/start.js && node --check src/server.js && node --check src/importer.js && node --check src/snapshot.js && node --check src/gas-sync.js && node --check src/public/app.js && node --check scripts/sync-google-sheet.js && node --check scripts/sync-gas-webapp.js && npm test"
   },
   "dependencies": {
     "express": "^5.1.0",

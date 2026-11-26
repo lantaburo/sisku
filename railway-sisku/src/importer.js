@@ -128,6 +128,7 @@ async function projectUsers(client, importId, users) {
          full_name = EXCLUDED.full_name,
          class_code = EXCLUDED.class_code,
          student_nis = EXCLUDED.student_nis,
+         active = true,
          source_import_id = EXCLUDED.source_import_id,
          updated_at = now()`,
       [id, user.sourceUserId, user.username, user.pinHash, user.role, user.fullName, user.classCode, user.studentNis, importId]
@@ -149,19 +150,20 @@ async function importSnapshot(rawSnapshot, options = {}) {
   }
 
   const pool = options.pool || getPool();
-  const existing = await pool.query(
-    `SELECT id, imported_at, sheet_count, row_count
-       FROM import_batches WHERE snapshot_checksum = $1 AND status = 'completed'`,
-    [summary.checksum]
-  );
-  if (existing.rowCount) {
-    return { mode: 'already-imported', checksum: summary.checksum, ...existing.rows[0], projectedUsers: users.length };
-  }
-
   const importId = crypto.randomUUID();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [summary.checksum]);
+    const existing = await client.query(
+      `SELECT id, imported_at, sheet_count, row_count
+         FROM import_batches WHERE snapshot_checksum = $1 AND status = 'completed'`,
+      [summary.checksum]
+    );
+    if (existing.rowCount) {
+      await client.query('COMMIT');
+      return { mode: 'already-imported', checksum: summary.checksum, ...existing.rows[0], projectedUsers: users.length };
+    }
     await client.query(
       `INSERT INTO import_batches(
          id, source_type, source_ref, source_exported_at, snapshot_checksum, status, sheet_count, row_count
@@ -179,6 +181,16 @@ async function importSnapshot(rawSnapshot, options = {}) {
       await insertRows(client, importId, sheet);
     }
     const projectedUsers = await projectUsers(client, importId, users);
+    const activeUsernames = users.map(user => user.username.toLowerCase());
+    if (activeUsernames.length) {
+      await client.query(
+        `UPDATE app_users
+            SET active = false, updated_at = now()
+          WHERE source_import_id IS NOT NULL
+            AND NOT (lower(username) = ANY($1::text[]))`,
+        [activeUsernames]
+      );
+    }
     await client.query(
       `INSERT INTO audit_log(action, entity_type, entity_id, details)
        VALUES ('SNAPSHOT_IMPORTED', 'import_batch', $1, $2::jsonb)`,

@@ -26,6 +26,27 @@ Buka `http://localhost:3000`. Endpoint kesiapan database tersedia di `/health/re
 
 ## Import tanpa menyimpan snapshot di disk
 
+### Jalur yang dipakai produksi: endpoint GAS read-only
+
+1. Tambahkan Script Property `RAILWAY_SYNC_SECRET` dengan nilai acak minimal 32 karakter.
+2. Isi `GAS_WEB_APP_URL` dengan URL deployment `/exec` dan `GAS_SYNC_SECRET` dengan nilai yang sama di Railway.
+3. Opsional: isi `GAS_SYNC_INTERVAL_MINUTES` (minimal 60; default 360 menit).
+4. Validasi tanpa menulis database:
+
+```bash
+npm run sync:gas
+```
+
+5. Terapkan snapshot append-only:
+
+```bash
+npm run sync:gas -- --apply
+```
+
+Endpoint GAS hanya membuka sheet yang ada di allowlist, memerlukan secret, dan mengirim maksimal 500 baris per permintaan. Railway juga menyediakan tombol sinkronisasi manual khusus superadmin. Snapshot otomatis dijalankan setelah startup dan sesuai interval selama ketiga variable tersebut tersedia.
+
+### Alternatif: Google Sheets API
+
 1. Buat service account Google dengan akses **Viewer**.
 2. Bagikan Spreadsheet SISKU hanya sebagai Viewer kepada email service account.
 3. Isi `GOOGLE_SHEET_ID` dan `GOOGLE_SERVICE_ACCOUNT_JSON` di environment lokal/Railway.
@@ -53,10 +74,10 @@ npm run import -- --file ./snapshot.json --apply
 ## Deployment Railway
 
 1. Buat project Railway dan tambahkan service PostgreSQL.
-2. Buat service aplikasi dari repository ini dan atur **Root Directory** ke `/railway-sisku`.
+2. Repository ini sudah menyediakan `Dockerfile` adapter di root; Railway dapat memakai root repository langsung.
 3. Pastikan `DATABASE_URL` direferensikan dari service PostgreSQL.
-4. Set **Pre-deploy command**: `npm run db:migrate`.
-5. Set **Healthcheck path**: `/health/ready` dan timeout 120 detik.
+4. Biarkan start command memakai `Dockerfile`; migrasi dijalankan aman oleh `src/start.js` sebelum server aktif.
+5. Set **Healthcheck path** (bukan command) ke `/health/ready` dan timeout 120 detik bila ingin pemeriksaan Railway eksplisit.
 6. Deploy dulu tanpa memindahkan domain produksi GAS.
 7. Jalankan dry-run lalu import awal dari terminal/job yang memiliki variabel Google.
 

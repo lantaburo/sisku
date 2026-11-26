@@ -1,11 +1,19 @@
 // ============================================================================
 // GOOGLE APPS SCRIPT (Code.gs) - SISKU REAL PRODUCTION (2-WAY SYNC)
-// VERSI: v2.30 (25 November 2026) - Rekap nilai wali kelas dan kepala sekolah
+// VERSI: v2.31 (26 November 2026) - Sinkronisasi read-only ke Railway
 // ============================================================================
-const APP_VERSION = 'v2.30';
+const APP_VERSION = 'v2.31';
 const FOLDER_PENDUKUNG_ID = '12TiJ3oT3WjJaksD7UfjlU2U18YpkA0bS';
 const FOLDER_SOAL_UAS_ID  = '1_aUdLO6f2Ka5N8jlPAuED_O0K_01x__2';
 const DOC_ACUAN_ID        = '1SvMI5RH3OlsVjRiHZteaMvjWD2TJANdO';
+const RAILWAY_SYNC_SHEETS = [
+  'Sheet1', 'Grade_Complaints', 'Announcements', 'Exam_Attempts',
+  'Task_Submissions', 'Internal_Messages', 'Activity_Log',
+  'Pengaturan_Organisasi', 'Yaumiah_Detail', 'Tugas_Kelas', 'Sesi_Ujian',
+  'Users', 'Master_Kelas', 'Master_Guru', 'Presensi', 'Yaumiah_Log',
+  'Tugas_Prestasi', 'Bank_Soal_UAS', 'Master_Mapel', 'Master_Yaumiah',
+  'Target_Tahfidz', 'Nilai_UAS'
+];
 
 // Fungsi maintenance sementara untuk memicu dialog otorisasi pemilik.
 // Tidak membaca atau mengembalikan data sekolah dan dihapus setelah dipakai.
@@ -834,6 +842,78 @@ function jsonResponse_(value) {
   return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
 }
 
+function railwaySyncSecretValid_(providedSecret) {
+  const expected = String(PropertiesService.getScriptProperties().getProperty('RAILWAY_SYNC_SECRET') || '');
+  const provided = String(providedSecret || '');
+  if (expected.length < 32 || provided.length < 32) return false;
+  const expectedDigest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, expected, Utilities.Charset.UTF_8);
+  const providedDigest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, provided, Utilities.Charset.UTF_8);
+  let different = expectedDigest.length ^ providedDigest.length;
+  const length = Math.max(expectedDigest.length, providedDigest.length);
+  for (let index = 0; index < length; index++) {
+    different |= (expectedDigest[index % expectedDigest.length] ^ providedDigest[index % providedDigest.length]);
+  }
+  return different === 0;
+}
+
+function requireRailwaySyncSecret_(providedSecret) {
+  if (!railwaySyncSecretValid_(providedSecret)) throw new Error('Kredensial sinkronisasi tidak valid.');
+}
+
+function railwaySyncCell_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString();
+  if (value === null || typeof value === 'undefined') return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  return String(value);
+}
+
+function railwaySyncSha256_(value) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8)
+    .map(byte => ((byte + 256) % 256).toString(16).padStart(2, '0')).join('');
+}
+
+function getRailwaySyncManifest_(providedSecret) {
+  requireRailwaySyncSecret_(providedSecret);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = RAILWAY_SYNC_SHEETS.map(name => ss.getSheetByName(name)).filter(Boolean).map(sheet => {
+    const rowCount = Math.max(0, sheet.getLastRow() - 1);
+    const columnCount = sheet.getLastColumn();
+    const values = columnCount > 0 ? sheet.getRange(1, 1, rowCount + 1, columnCount).getValues().map(row => row.map(railwaySyncCell_)) : [[]];
+    const headers = values[0] || [];
+    const rows = values.slice(1);
+    return {
+      name: sheet.getName(), headers: headers, rowCount: rowCount,
+      checksum: railwaySyncSha256_(JSON.stringify([headers, rows]))
+    };
+  });
+  return {
+    status: 'ok',
+    format: 'sisku-sheet-snapshot/v1',
+    spreadsheetId: ss.getId(),
+    spreadsheetTitle: ss.getName(),
+    exportedAt: new Date().toISOString(),
+    sheets: sheets
+  };
+}
+
+function getRailwaySyncSheet_(providedSecret, sheetName, offset, requestedLimit) {
+  requireRailwaySyncSecret_(providedSecret);
+  const name = String(sheetName || '');
+  if (RAILWAY_SYNC_SHEETS.indexOf(name) < 0) throw new Error('Sheet tidak tersedia untuk sinkronisasi.');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(name);
+  if (!sheet) throw new Error('Sheet tidak ditemukan.');
+  const start = Math.max(0, Math.floor(Number(offset) || 0));
+  const limit = Math.min(500, Math.max(1, Math.floor(Number(requestedLimit) || 250)));
+  const rowCount = Math.max(0, sheet.getLastRow() - 1);
+  const count = Math.max(0, Math.min(limit, rowCount - start));
+  const columnCount = sheet.getLastColumn();
+  const rows = count > 0 && columnCount > 0
+    ? sheet.getRange(start + 2, 1, count, columnCount).getValues().map(row => row.map(railwaySyncCell_))
+    : [];
+  return { status: 'ok', name: name, offset: start, rowCount: rowCount, rows: rows, nextOffset: start + rows.length };
+}
+
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('SISKU | Monitoring Yaumiah & Akademik')
@@ -1649,6 +1729,8 @@ function processClientAction(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const d = payload.data || {};
   let result = { status: 'ok' };
+  if (payload.action === 'RAILWAY_SYNC_MANIFEST') return getRailwaySyncManifest_(d.secret);
+  if (payload.action === 'RAILWAY_SYNC_SHEET') return getRailwaySyncSheet_(d.secret, d.sheet, d.offset, d.limit);
   if (payload.action === 'LOGIN') {
     const loginResult = loginUser(d.username, d.pin);
     if (loginResult && loginResult.status === 'ok' && loginResult.user) {

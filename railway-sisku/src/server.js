@@ -8,6 +8,7 @@ const { rateLimit } = require('express-rate-limit');
 const { getConfig } = require('./config');
 const { getPool, closePool } = require('./db');
 const { verifyPin, hashPin, createSessionToken, parseCookies, sha256 } = require('./security');
+const { syncFromGasOnce } = require('./gas-sync');
 const {
   normalized, normalizeKey, latestImport, loadSheet, value, schoolDate,
   todayJakarta, visibleAnnouncement
@@ -489,6 +490,25 @@ app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+app.post('/api/v1/admin/sync-gas', sameOrigin, requireAuth, requireRoles('superadmin'), async (req, res) => {
+  try {
+    const result = await syncFromGasOnce({ apply: true });
+    await db().query(
+      `INSERT INTO audit_log(actor_user_id, action, entity_type, entity_id, details)
+       VALUES ($1, 'GAS_SNAPSHOT_SYNC', 'import_batch', $2, $3::jsonb)`,
+      [req.user.id, result.importId || result.id || null, JSON.stringify({ mode: result.mode, checksum: result.checksum, rowCount: result.rowCount })]
+    );
+    res.json({
+      status: 'ok',
+      message: result.mode === 'already-imported' ? 'Data Railway sudah sama dengan GAS.' : 'Snapshot terbaru berhasil disinkronkan.',
+      sync: { mode: result.mode, sheetCount: result.sheetCount, rowCount: result.rowCount, importedAt: result.imported_at || new Date().toISOString() }
+    });
+  } catch (error) {
+    console.error('GAS_SYNC_REQUEST_FAILED', { requestId: req.requestId, message: error.message });
+    res.status(503).json({ status: 'error', message: 'Sinkronisasi belum dapat dijalankan. Periksa konfigurasi GAS lalu coba lagi.' });
   }
 });
 

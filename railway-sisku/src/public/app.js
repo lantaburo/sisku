@@ -56,6 +56,7 @@ function showDashboard() {
   }).format(new Date());
   const canSeeMaster = ['superadmin', 'guru'].includes(user.role);
   $('#master-nav').hidden = !canSeeMaster;
+  $('#sync-gas-button').hidden = user.role !== 'superadmin';
   document.querySelectorAll('.admin-only').forEach(element => { element.hidden = user.role !== 'superadmin'; });
 }
 
@@ -311,6 +312,23 @@ $('#logout-button').addEventListener('click', async () => {
   catch (_) {}
   state.user = null;
   showLogin();
+});
+
+$('#sync-gas-button').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const label = button.firstElementChild;
+  button.disabled = true;
+  label.textContent = 'Menyinkronkan…';
+  try {
+    const result = await api('/api/v1/admin/sync-gas', { method: 'POST', body: '{}' });
+    await loadDashboard();
+    toast(result.message || 'Sinkronisasi selesai.');
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+    label.textContent = 'Sinkronkan dari GAS';
+  }
 });
 
 $('#change-pin-form').addEventListener('submit', async event => {

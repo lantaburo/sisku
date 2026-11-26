@@ -1,11 +1,11 @@
 {
   "name": "sisku",
-  "version": "2.30.0",
+  "version": "2.31.0",
   "description": "SISKU (Sistem Informasi Sekolah Terpadu)",
   "scripts": {
     "test": "node scripts/validate.mjs",
     "push": "npm test && clasp push",
-    "deploy": "npm test && clasp push && clasp deploy -i AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A -d 'SISKU v2.30 rekap nilai wali kelas dan kepala sekolah'",
+    "deploy": "npm test && clasp push && clasp deploy -i AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A -d 'SISKU v2.31 sinkronisasi read-only Railway'",
     "deployments": "clasp deployments"
   }
 }
