@@ -3,180 +3,119 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#123b32">
-  <title>SISKU — Ruang Sekolah Terpadu</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=2.31">
-  <script src="/assets/app.js?v=2.31" defer></script>
+  <meta name="theme-color" content="#065f46">
+  <meta name="description" content="SISKU — Sistem Informasi Sekolah Terpadu">
+  <title>SISKU | Sistem Informasi Sekolah Terpadu</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css?v=2.32">
+  <script src="/assets/app.js?v=2.32" defer></script>
 </head>
 <body>
-  <div class="ambient ambient-one"></div>
-  <div class="ambient ambient-two"></div>
+  <div id="loading-bar" class="loading-bar" hidden><span></span></div>
 
-  <main id="login-view" class="login-shell">
-    <section class="welcome-panel" aria-labelledby="welcome-title">
-      <div class="brand brand-light">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <span><b>SISKU</b><small>Ruang sekolah terpadu</small></span>
+  <main id="login-view" class="login-screen">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="login-brand">
+        <img src="/assets/logo.png" alt="Logo SISKU">
+        <div><span class="brand-kicker">Sistem Informasi Sekolah Terpadu</span><strong>SISKU</strong></div>
       </div>
-      <div class="welcome-copy">
-        <p class="eyebrow">Versi Railway · tahap fondasi</p>
-        <h1 id="welcome-title">Satu ruang yang lebih tenang untuk aktivitas sekolah.</h1>
-        <p>Data lama tetap dijaga di Spreadsheet. Versi ini tumbuh bertahap, dengan penyimpanan persisten dan pemeriksaan migrasi yang dapat diaudit.</p>
+      <div class="login-copy">
+        <span class="live-pill"><i></i> Railway production</span>
+        <h1 id="login-title">Selamat datang kembali</h1>
+        <p>Masuk menggunakan NIS atau akun yang sama dengan aplikasi sekolah sebelumnya.</p>
       </div>
-      <div class="trust-row" aria-label="Prinsip migrasi">
-        <div><span>01</span><p>Tanpa hapus data sumber</p></div>
-        <div><span>02</span><p>Snapshot dengan checksum</p></div>
-        <div><span>03</span><p>Perpindahan per modul</p></div>
-      </div>
+      <form id="login-form" novalidate>
+        <label for="username">NIS atau username</label>
+        <input id="username" name="username" autocomplete="username" maxlength="120" required placeholder="Masukkan NIS atau username">
+        <div class="label-row"><label for="pin">PIN akses</label><button id="toggle-pin" class="text-button" type="button" aria-controls="pin">Tampilkan</button></div>
+        <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" required placeholder="Masukkan PIN">
+        <div id="login-message" class="form-message" role="alert" aria-live="polite"></div>
+        <button id="login-button" class="primary-button" type="submit">Masuk ke SISKU</button>
+      </form>
+      <div class="login-foot"><span>●</span> Sesi aman, terenkripsi, dan berakhir otomatis.</div>
     </section>
-
-    <section class="login-panel" aria-labelledby="login-title">
-      <div class="mobile-brand brand">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <span><b>SISKU</b><small>Ruang sekolah terpadu</small></span>
-      </div>
-      <div class="login-card">
-        <p class="eyebrow dark">Selamat datang</p>
-        <h2 id="login-title">Masuk ke SISKU</h2>
-        <p class="muted">Gunakan akun yang sama dengan aplikasi sekolah sebelumnya.</p>
-        <form id="login-form" novalidate>
-          <label for="username">NIS atau username</label>
-          <input id="username" name="username" autocomplete="username" maxlength="120" required placeholder="Contoh: 20260801">
-          <div class="label-row">
-            <label for="pin">PIN akses</label>
-            <button id="toggle-pin" class="text-button" type="button" aria-controls="pin">Tampilkan</button>
-          </div>
-          <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" required placeholder="Masukkan PIN">
-          <div id="login-message" class="form-message" role="alert" aria-live="polite"></div>
-          <button id="login-button" class="primary-button" type="submit">
-            <span>Masuk dengan aman</span><span aria-hidden="true">→</span>
-          </button>
-        </form>
-        <p class="privacy-note"><span aria-hidden="true">●</span> Sesi disimpan aman di server dan berakhir otomatis.</p>
-      </div>
-    </section>
-  </main>
-
-  <main id="dashboard-view" class="dashboard-shell" hidden>
-    <aside class="sidebar">
-      <div class="brand brand-light">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <span><b>SISKU</b><small>Railway foundation</small></span>
-      </div>
-      <nav aria-label="Menu utama">
-        <button class="nav-item active" type="button" data-view="summary"><span aria-hidden="true">⌂</span> Ringkasan</button>
-        <div class="nav-divider">Modul sekolah</div>
-        <button id="master-nav" class="nav-item" type="button" data-view="master"><span aria-hidden="true">◇</span> Data master <small>Read</small></button>
-        <button class="nav-item" type="button" disabled><span aria-hidden="true">✓</span> Presensi <small>GAS</small></button>
-        <button class="nav-item" type="button" disabled><span aria-hidden="true">✦</span> Yaumiah <small>GAS</small></button>
-        <button class="nav-item" type="button" disabled><span aria-hidden="true">▤</span> Ujian & nilai <small>GAS</small></button>
-        <div class="nav-divider">Akun</div>
-        <button class="nav-item" type="button" data-view="security"><span aria-hidden="true">⌁</span> Keamanan</button>
-      </nav>
-      <div class="sidebar-note"><b>Migrasi aman</b><p>Fitur lama tetap tersedia di aplikasi GAS selama masa transisi.</p></div>
+    <aside class="login-story" aria-hidden="true">
+      <span class="story-orbit orbit-one"></span><span class="story-orbit orbit-two"></span>
+      <div class="story-content"><p>Ruang sekolah terpadu</p><h2>Aktivitas sekolah, lebih rapi dan mudah dipantau.</h2><div class="story-points"><span>Presensi</span><span>Yaumiah</span><span>Ujian</span><span>Akademik</span></div></div>
     </aside>
-
-    <section class="dashboard-main">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow dark" id="today-label">Ringkasan sekolah</p>
-          <h1 id="school-name">SISKU</h1>
-        </div>
-        <div class="user-menu">
-          <div class="avatar" id="user-avatar">S</div>
-          <div><b id="user-name">Pengguna</b><small id="user-role">—</small></div>
-          <button id="logout-button" class="logout-button" type="button">Keluar</button>
-        </div>
-      </header>
-
-      <div class="content-wrap">
-        <section id="summary-panel" class="view-panel">
-        <section class="hero-card">
-          <div>
-            <span class="status-pill"><i></i> Snapshot produksi tersedia</span>
-            <h2 id="hero-title">Data sekolah sudah hadir di ruang Railway.</h2>
-            <p id="hero-copy">Ringkasan ditampilkan sesuai peran. Operasi yang berisiko tetap berjalan di GAS selama masa rekonsiliasi.</p>
-            <button id="sync-gas-button" class="primary-button" type="button" hidden><span>Sinkronkan dari GAS</span><span aria-hidden="true">↻</span></button>
-          </div>
-          <div class="migration-ring" aria-label="Tahap 2 dari 5"><b>2<small>/5</small></b><span>tahap</span></div>
-        </section>
-
-        <section class="metric-grid" aria-label="Ringkasan data">
-          <article class="metric-card"><span class="metric-icon green">▦</span><div><p>Snapshot terakhir</p><strong id="snapshot-time">Belum ada</strong><small id="snapshot-source">Menunggu sinkronisasi</small></div></article>
-          <article class="metric-card"><span class="metric-icon gold">≡</span><div><p>Total baris tersalin</p><strong id="total-rows">0</strong><small>Salinan append-only</small></div></article>
-          <article class="metric-card"><span class="metric-icon blue">◎</span><div><p>Akun siap login</p><strong id="total-users">0</strong><small id="role-summary">Belum diproyeksikan</small></div></article>
-          <article class="metric-card"><span class="metric-icon rose">#</span><div><p>Sheet terarsip</p><strong id="total-sheets">0</strong><small>Checksum per sheet</small></div></article>
-        </section>
-
-        <div class="dashboard-grid">
-          <section class="surface" aria-labelledby="module-title">
-            <div class="section-heading"><div><p class="eyebrow dark">Peta perpindahan</p><h2 id="module-title">Status setiap modul</h2></div><span class="quiet-badge">Bertahap</span></div>
-            <div id="module-list" class="module-list"></div>
-          </section>
-
-          <section class="surface" aria-labelledby="sheet-title">
-            <div class="section-heading"><div><p class="eyebrow dark">Integritas data</p><h2 id="sheet-title">Isi snapshot</h2></div><span id="checksum-badge" class="quiet-badge">—</span></div>
-            <div id="sheet-list" class="sheet-list"><p class="empty-state">Belum ada snapshot yang diimpor.</p></div>
-          </section>
-        </div>
-        <section class="surface operational-surface" aria-labelledby="operational-title">
-          <div class="section-heading">
-            <div><p class="eyebrow dark">Data sesuai peran</p><h2 id="operational-title">Aktivitas sekolah</h2></div>
-            <span id="data-mode-badge" class="quiet-badge">Read-only aman</span>
-          </div>
-          <div id="operational-metrics" class="compact-metric-grid"></div>
-          <div id="announcement-list" class="announcement-list"></div>
-          <div class="records-grid">
-            <article class="record-card"><h3>Presensi terbaru</h3><div id="attendance-table" class="table-wrap"></div></article>
-            <article class="record-card"><h3>Nilai terbaru</h3><div id="grade-table" class="table-wrap"></div></article>
-            <article class="record-card"><h3>Yaumiah terbaru</h3><div id="yaumiah-table" class="table-wrap"></div></article>
-            <article class="record-card"><h3>Tugas kelas</h3><div id="task-table" class="table-wrap"></div></article>
-          </div>
-        </section>
-        </section>
-
-        <section id="master-panel" class="view-panel" hidden>
-          <section class="surface">
-            <div class="section-heading">
-              <div><p class="eyebrow dark">Data master</p><h2>Direktori sekolah</h2></div>
-              <span class="quiet-badge">Tanpa PIN</span>
-            </div>
-            <div id="master-tabs" class="tab-row">
-              <button type="button" class="tab-button active" data-resource="students">Siswa</button>
-              <button type="button" class="tab-button admin-only" data-resource="teachers">Guru</button>
-              <button type="button" class="tab-button admin-only" data-resource="classes">Kelas</button>
-              <button type="button" class="tab-button admin-only" data-resource="subjects">Mapel</button>
-            </div>
-            <div class="master-toolbar">
-              <input id="master-search" type="search" placeholder="Cari data…" aria-label="Cari data master">
-              <span id="master-count" class="quiet-badge">0 data</span>
-            </div>
-            <div id="master-table" class="table-wrap master-table"></div>
-            <p class="read-only-note">Data ini berasal dari snapshot terverifikasi. Perubahan master masih dilakukan di GAS sampai dual-write diuji.</p>
-          </section>
-        </section>
-
-        <section id="security-panel" class="view-panel" hidden>
-          <section class="surface security-card">
-            <p class="eyebrow dark">Keamanan akun</p>
-            <h2>Ganti PIN Railway</h2>
-            <p>Gunakan enam digit unik. Perubahan ini berlaku untuk login Railway dan tidak mengubah akun GAS selama masa transisi.</p>
-            <form id="change-pin-form">
-              <label for="current-pin">PIN saat ini</label>
-              <input id="current-pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" required>
-              <label for="new-pin">PIN baru, 6 digit</label>
-              <input id="new-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required>
-              <label for="confirm-pin">Ulangi PIN baru</label>
-              <input id="confirm-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required>
-              <div id="pin-message" class="form-message" role="alert"></div>
-              <button class="primary-button" type="submit"><span>Perbarui PIN</span><span aria-hidden="true">→</span></button>
-            </form>
-          </section>
-        </section>
-      </div>
-    </section>
   </main>
 
+  <div id="dashboard-view" class="app-shell" hidden>
+    <header class="app-header">
+      <div class="header-main">
+        <a class="app-brand" href="#" data-view-link="summary" aria-label="Beranda SISKU"><span class="logo-box"><img src="/assets/logo.png" alt=""></span><span><b id="school-name">SISKU</b><small>Sistem Informasi Sekolah Terpadu</small></span></a>
+        <div class="header-actions"><span class="sync-pill"><i></i><span class="desktop-only">Data tersinkron</span></span><span id="role-badge" class="role-badge">Pengguna</span><button id="security-shortcut" class="header-button" type="button" title="Keamanan akun">🔑 <span class="desktop-only">PIN</span></button><button id="logout-button" class="header-button danger" type="button">Keluar</button></div>
+      </div>
+      <nav id="top-navigation" class="top-navigation" aria-label="Menu utama"></nav>
+    </header>
+
+    <main class="app-main">
+      <section class="profile-strip">
+        <div class="profile-avatar" id="user-avatar">S</div>
+        <div><p id="greeting-label">Selamat datang</p><h1 id="user-name">Pengguna SISKU</h1><span id="user-context">Memuat cakupan data…</span></div>
+        <div class="profile-date"><b id="today-day">—</b><span id="today-full">—</span></div>
+      </section>
+
+      <section id="summary-panel" class="view-panel">
+        <div id="role-hero" class="role-hero"><div><span id="hero-eyebrow">Dashboard</span><h2 id="hero-title">Ringkasan sekolah</h2><p id="hero-copy">Data disiapkan sesuai peran dan cakupan akun Anda.</p></div><div id="hero-mark" class="hero-mark">⌂</div></div>
+        <div id="metric-grid" class="metric-grid"></div>
+        <div class="content-grid">
+          <section class="surface span-two"><div class="section-heading"><div><span>Pengumuman</span><h2>Informasi terbaru</h2></div><span class="soft-badge">Sesuai akun</span></div><div id="announcement-list" class="announcement-list"></div></section>
+          <section class="surface"><div class="section-heading"><div><span>Presensi</span><h2>Aktivitas terbaru</h2></div><button class="small-button" type="button" data-view-link="attendance">Lihat semua</button></div><div id="summary-attendance" class="table-wrap"></div></section>
+          <section class="surface"><div class="section-heading"><div><span>Akademik</span><h2>Nilai terbaru</h2></div><button class="small-button" type="button" data-view-link="grades">Lihat semua</button></div><div id="summary-grades" class="table-wrap"></div></section>
+        </div>
+      </section>
+
+      <section id="attendance-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Presensi sekolah</span><h2 id="attendance-title">Riwayat kehadiran</h2><p id="attendance-copy">Data terbaru sesuai cakupan akun.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka presensi di GAS</a></div>
+        <section class="surface"><div class="table-toolbar"><input class="table-search" data-table-filter="attendance-table" type="search" placeholder="Cari nama, NIS, atau status…"><span id="attendance-count" class="soft-badge">0 data</span></div><div id="attendance-table" class="table-wrap large-table"></div></section>
+      </section>
+
+      <section id="yaumiah-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Pembiasaan karakter</span><h2 id="yaumiah-title">Monitoring Yaumiah</h2><p id="yaumiah-copy">Capaian ibadah harian, tilawah, dan murajaah.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka Yaumiah di GAS</a></div>
+        <div id="yaumiah-cards" class="mini-stat-grid"></div>
+        <section class="surface"><div class="table-toolbar"><input class="table-search" data-table-filter="yaumiah-table" type="search" placeholder="Cari nama, NIS, atau tanggal…"><span id="yaumiah-count" class="soft-badge">0 data</span></div><div id="yaumiah-table" class="table-wrap large-table"></div></section>
+      </section>
+
+      <section id="tasks-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Kegiatan siswa</span><h2 id="tasks-title">Tugas & prestasi</h2><p>Tugas kelas dan pencapaian siswa dalam satu halaman.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Kelola di GAS</a></div>
+        <div class="two-column"><section class="surface"><div class="section-heading"><div><span>Agenda kelas</span><h2>Daftar tugas</h2></div><span id="task-count" class="soft-badge">0 tugas</span></div><div id="task-table" class="table-wrap large-table"></div></section><section class="surface"><div class="section-heading"><div><span>Apresiasi</span><h2>Prestasi siswa</h2></div><span id="achievement-count" class="soft-badge">0 prestasi</span></div><div id="achievement-table" class="table-wrap large-table"></div></section></div>
+      </section>
+
+      <section id="grades-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Ujian & akademik</span><h2 id="grades-title">Nilai ujian</h2><p id="grades-copy">Riwayat nilai yang dapat dilihat oleh akun Anda.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka ujian di GAS</a></div>
+        <div id="grade-cards" class="mini-stat-grid"></div>
+        <section class="surface"><div class="table-toolbar"><input class="table-search" data-table-filter="grade-table" type="search" placeholder="Cari siswa, mapel, atau status…"><span id="grade-count" class="soft-badge">0 nilai</span></div><div id="grade-table" class="table-wrap large-table"></div></section>
+      </section>
+
+      <section id="questions-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Bank soal UAS</span><h2 id="questions-title">Kesiapan soal & sesi</h2><p id="questions-copy">Statistik tanpa membuka kunci jawaban atau token ujian.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Kelola soal di GAS</a></div>
+        <div class="two-column"><section class="surface"><div class="section-heading"><div><span>Bank soal</span><h2>Rekap per mapel</h2></div></div><div id="question-table" class="table-wrap large-table"></div></section><section class="surface"><div class="section-heading"><div><span>Kontrol ujian</span><h2>Status sesi</h2></div></div><div id="session-list" class="session-list"></div></section></div>
+      </section>
+
+      <section id="master-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Data sekolah</span><h2 id="master-title">Direktori sekolah</h2><p>Data ditampilkan tanpa PIN dan dibatasi menurut peran.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Kelola master di GAS</a></div>
+        <section class="surface"><div id="master-tabs" class="tab-row"></div><div class="table-toolbar"><input id="master-search" type="search" placeholder="Cari data master…"><span id="master-count" class="soft-badge">0 data</span></div><div id="master-table" class="table-wrap large-table"></div></section>
+      </section>
+
+      <section id="integration-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Superadmin</span><h2>Integrasi GAS & Railway</h2><p>Periksa snapshot, jalankan sinkronisasi, dan pantau integritas data.</p></div><button id="sync-gas-button" class="primary-button compact" type="button">Sinkronkan sekarang</button></div>
+        <div id="migration-metrics" class="metric-grid"></div>
+        <section class="surface"><div class="section-heading"><div><span>Integritas snapshot</span><h2>Sheet tersinkron</h2></div><span id="checksum-badge" class="soft-badge">—</span></div><div id="sheet-list" class="sheet-list"></div></section>
+      </section>
+
+      <section id="security-panel" class="view-panel" hidden>
+        <div class="page-heading"><div><span>Keamanan akun</span><h2>Ganti PIN Railway</h2><p>Gunakan enam digit unik. Perubahan ini hanya berlaku untuk login Railway selama masa transisi.</p></div></div>
+        <section class="surface form-surface"><form id="change-pin-form"><label for="current-pin">PIN saat ini</label><input id="current-pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" required><label for="new-pin">PIN baru, 6 digit</label><input id="new-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required><label for="confirm-pin">Ulangi PIN baru</label><input id="confirm-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required><div id="pin-message" class="form-message" role="alert"></div><button class="primary-button" type="submit">Perbarui PIN</button></form></section>
+      </section>
+    </main>
+
+    <nav id="bottom-navigation" class="bottom-navigation" aria-label="Menu seluler"></nav>
+    <footer class="app-footer"><span>SISKU Railway v2.32</span><span>Data operasional tetap aman di GAS selama transisi</span></footer>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

@@ -14,6 +14,7 @@ COPY railway-sisku/package.json ./
 COPY railway-sisku/migrations ./migrations
 COPY railway-sisku/src ./src
 COPY railway-sisku/scripts ./scripts
+COPY logo-128.png ./src/public/logo.png
 USER sisku
 EXPOSE 3000
 CMD ["node", "src/start.js"]
