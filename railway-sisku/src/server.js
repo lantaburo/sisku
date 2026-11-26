@@ -129,6 +129,10 @@ function number(valueToParse) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function httpError(status, message) {
+  const error = new Error(message); error.status = status; return error;
+}
+
 function byNewest(rows, fieldNames) {
   return rows.slice().sort((left, right) => {
     const leftValue = fieldNames.map(name => value(left, name)).find(Boolean) || '';
@@ -340,6 +344,23 @@ app.get('/api/v1/overview', requireAuth, async (req, res, next) => {
       loadSheet(db(), 'Tugas_Prestasi', activeImport.id),
       loadSheet(db(), 'Sesi_Ujian', activeImport.id)
     ]);
+    const [nativeAttendance, nativeYaumiah, nativeTasks, nativeAnnouncements, nativeAttempts, nativeSessions] = await Promise.all([
+      db().query('SELECT school_date, student_nis, student_name, status, check_in_at FROM native_attendance ORDER BY school_date DESC, check_in_at DESC LIMIT 1000'),
+      db().query('SELECT school_date, student_nis, student_name, class_code, achievement, reading, parent_note, updated_at FROM native_yaumiah ORDER BY school_date DESC LIMIT 1000'),
+      db().query('SELECT id, subject, class_code, title, description, deadline, status, created_at FROM native_tasks WHERE active = true ORDER BY created_at DESC LIMIT 500'),
+      db().query('SELECT id, title, message, targets, creator_name, created_at FROM native_announcements WHERE active = true ORDER BY created_at DESC LIMIT 200'),
+      db().query("SELECT id, submitted_at, student_nis, student_name, class_code, subject, correct_count, total_questions, score, status FROM native_exam_attempts WHERE status = 'SUBMITTED' ORDER BY submitted_at DESC LIMIT 1000"),
+      db().query('SELECT id, status, subject, class_code, note, updated_at FROM native_exam_sessions ORDER BY updated_at DESC LIMIT 100')
+    ]);
+    nativeAttendance.rows.forEach(row => attendance.push({ Timestamp: row.check_in_at, Tanggal: row.school_date, NIS: row.student_nis, Nama: row.student_name, Status: row.status, Jam_Masuk: row.check_in_at }));
+    nativeYaumiah.rows.forEach(row => yaumiah.push({ Timestamp: row.updated_at, Tanggal: row.school_date, NIS: row.student_nis, Nama: row.student_name, Kelas: row.class_code, Capaian_Persen: row.achievement, Tilawah_Murajaah: row.reading, Paraf_Ortu: row.parent_note }));
+    nativeTasks.rows.forEach(row => tasks.push({ Timestamp: row.created_at, ID_Tugas: row.id, Mapel: row.subject, Kelas: row.class_code, Judul: row.title, Deskripsi: row.description, Deadline: row.deadline, Status: row.status }));
+    nativeAnnouncements.rows.forEach(row => announcements.push({ ID_Pengumuman: row.id, Timestamp: row.created_at, Actor_Nama: row.creator_name, Target_Accounts: (row.targets || []).join(','), Judul: row.title, Pesan: row.message }));
+    nativeAttempts.rows.forEach(row => {
+      attempts.push({ Attempt_ID: row.id, Submitted_At: row.submitted_at, NIS: row.student_nis, Nama: row.student_name, Kelas: row.class_code, Mapel: row.subject, Status: row.status, Benar: row.correct_count, Total: row.total_questions, Skor: row.score });
+      grades.push({ Timestamp: row.submitted_at, Tanggal: row.submitted_at, NIS: row.student_nis, Nama: row.student_name, Kelas: row.class_code, Mapel: row.subject, Benar: row.correct_count, Total_Soal: row.total_questions, Skor_Akhir: row.score, Status_Penilaian: 'FINAL' });
+    });
+    nativeSessions.rows.forEach(row => examSessions.push({ ID_Sesi: row.id, Status_Ujian: row.status, Mapel_Aktif: row.subject, Kelas_Aktif: row.class_code, Catatan: row.note, Updated_At: row.updated_at }));
     const role = req.user.role;
     const isAdmin = role === 'superadmin';
     const isLeadership = isAdmin || role === 'kepsek';
@@ -613,6 +634,111 @@ app.get('/api/v1/questions', requireAuth, requireRoles('superadmin', 'kepsek', '
   } catch (error) {
     next(error);
   }
+});
+
+app.get('/api/v1/exams', requireAuth, async (req, res, next) => {
+  try {
+    const params = [];
+    let scope = '';
+    if (req.user.role === 'siswa') {
+      params.push(req.user.class_code);
+      scope = "WHERE s.status = 'OPEN' AND (s.class_code = 'SEMUA' OR s.class_code = $1)";
+    } else if (!['superadmin', 'kepsek', 'guru'].includes(req.user.role)) {
+      return res.json({ status: 'ok', items: [] });
+    }
+    const result = await db().query(
+      `SELECT s.id, s.subject, s.class_code, s.note, s.status, s.opened_at, s.updated_at,
+              count(q.id)::int AS question_count
+         FROM native_exam_sessions s
+         LEFT JOIN school_questions q ON q.active = true AND q.approval_status = 'Approved'
+          AND lower(q.subject) = lower(s.subject) AND (q.class_code = 'SEMUA' OR q.class_code = s.class_code)
+         ${scope}
+        GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100`,
+      params
+    );
+    res.json({ status: 'ok', items: result.rows.map(row => ({ id: row.id, subject: row.subject, classCode: row.class_code, note: row.note, status: row.status, questionCount: row.question_count, openedAt: row.opened_at })) });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/v1/exams/:id/start', sameOrigin, requireAuth, requireRoles('siswa'), async (req, res, next) => {
+  const client = await db().connect();
+  try {
+    await client.query('BEGIN');
+    const session = await client.query("SELECT * FROM native_exam_sessions WHERE id = $1 AND status = 'OPEN' FOR UPDATE", [req.params.id]);
+    if (!session.rowCount) throw httpError(404, 'Sesi ujian tidak aktif.');
+    const exam = session.rows[0];
+    if (exam.class_code !== 'SEMUA' && exam.class_code !== req.user.class_code) throw httpError(403, 'Sesi ujian bukan untuk kelas Anda.');
+    const existing = await client.query('SELECT id, status, question_manifest FROM native_exam_attempts WHERE session_id = $1 AND user_id = $2', [exam.id, req.user.id]);
+    if (existing.rowCount && existing.rows[0].status === 'SUBMITTED') throw httpError(409, 'Ujian ini sudah pernah dikumpulkan.');
+    let manifest = existing.rows[0] && existing.rows[0].question_manifest;
+    let attemptId = existing.rows[0] && existing.rows[0].id;
+    if (!manifest) {
+      const questions = await client.query(
+        `SELECT id FROM school_questions WHERE active = true AND approval_status = 'Approved'
+          AND lower(subject) = lower($1) AND (class_code = 'SEMUA' OR class_code = $2)
+          ORDER BY ${exam.shuffle_questions ? 'random()' : 'id'} LIMIT 100`,
+        [exam.subject, req.user.class_code]
+      );
+      if (!questions.rowCount) throw httpError(422, 'Belum ada soal disetujui untuk sesi ini.');
+      manifest = questions.rows.map(row => row.id); attemptId = crypto.randomUUID();
+      await client.query(
+        `INSERT INTO native_exam_attempts(id,session_id,user_id,student_nis,student_name,class_code,subject,question_manifest,total_questions)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
+        [attemptId, exam.id, req.user.id, req.user.student_nis || req.user.username, req.user.full_name, req.user.class_code, exam.subject, JSON.stringify(manifest), manifest.length]
+      );
+    }
+    const questionResult = await client.query(
+      `SELECT id, question_text, options, question_type, image_url FROM school_questions WHERE id = ANY($1::text[])`,
+      [manifest]
+    );
+    const lookup = new Map(questionResult.rows.map(row => [row.id, row]));
+    const questions = manifest.map(id => lookup.get(id)).filter(Boolean).map(row => ({ id: row.id, question: row.question_text, options: row.options || {}, type: row.question_type, imageUrl: row.image_url }));
+    await client.query('COMMIT');
+    res.json({ status: 'ok', attemptId, session: { id: exam.id, subject: exam.subject, classCode: exam.class_code, note: exam.note }, questions });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error.status) return res.status(error.status).json({ status: 'error', message: error.message });
+    next(error);
+  } finally { client.release(); }
+});
+
+app.post('/api/v1/exams/:id/submit', sameOrigin, requireAuth, requireRoles('siswa'), async (req, res, next) => {
+  const client = await db().connect();
+  try {
+    await client.query('BEGIN');
+    const attempt = await client.query("SELECT * FROM native_exam_attempts WHERE session_id = $1 AND user_id = $2 FOR UPDATE", [req.params.id, req.user.id]);
+    if (!attempt.rowCount) throw httpError(404, 'Attempt ujian tidak ditemukan.');
+    if (attempt.rows[0].status === 'SUBMITTED') throw httpError(409, 'Jawaban sudah pernah dikumpulkan.');
+    const manifest = attempt.rows[0].question_manifest || [];
+    const answers = req.body && req.body.answers && typeof req.body.answers === 'object' ? req.body.answers : {};
+    const questions = await client.query('SELECT id, answer_key, question_type FROM school_questions WHERE id = ANY($1::text[])', [manifest]);
+    const canonical = valueToNormalize => String(valueToNormalize || '').toUpperCase().split(/[,;|\s]+/).filter(Boolean).sort().join(',');
+    let correct = 0; let objectiveTotal = 0; let hasEssay = false;
+    questions.rows.forEach(question => {
+      if (String(question.question_type).toUpperCase() === 'ESAI') { hasEssay = true; return; }
+      objectiveTotal++;
+      if (canonical(answers[question.id]) === canonical(question.answer_key)) correct++;
+    });
+    const score = objectiveTotal ? Math.round((correct / objectiveTotal) * 10000) / 100 : 0;
+    await client.query(
+      `UPDATE native_exam_attempts SET answers = $1::jsonb, correct_count = $2, total_questions = $3,
+              score = $4, status = 'SUBMITTED', submitted_at = now() WHERE id = $5`,
+      [JSON.stringify(answers), correct, manifest.length, score, attempt.rows[0].id]
+    );
+    await client.query('COMMIT');
+    res.json({ status: 'ok', message: hasEssay ? 'Jawaban terkirim. Nilai objektif tersimpan; esai menunggu penilaian guru.' : 'Jawaban berhasil dikumpulkan.', result: { correct, total: manifest.length, score, hasEssay } });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error.status) return res.status(error.status).json({ status: 'error', message: error.message });
+    next(error);
+  } finally { client.release(); }
+});
+
+app.get('/api/v1/messages', requireAuth, requireRoles('superadmin'), async (req, res, next) => {
+  try {
+    const result = await db().query('SELECT id, sender_username, sender_name, sender_role, subject, message, status, created_at FROM native_messages ORDER BY created_at DESC LIMIT 500');
+    res.json({ status: 'ok', items: result.rows });
+  } catch (error) { next(error); }
 });
 
 app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {

@@ -19,3 +19,13 @@ test('pembuatan soal native tersedia untuk guru dan superadmin', () => {
   assert.equal(actionAllowed('kepsek', 'UPDATE_APPROVAL_SOAL'), true);
   assert.equal(actionAllowed('guru', 'UPDATE_APPROVAL_SOAL'), false);
 });
+
+test('layanan operasional native mengikuti peran', () => {
+  assert.equal(actionAllowed('siswa', 'PRESENSI'), true);
+  assert.equal(actionAllowed('siswa', 'YAUMIAH'), true);
+  assert.equal(actionAllowed('guru', 'TUGAS'), true);
+  assert.equal(actionAllowed('guru', 'SESI_UAS'), true);
+  assert.equal(actionAllowed('superadmin', 'SEND_ANNOUNCEMENT'), true);
+  assert.equal(actionAllowed('ortu', 'SEND_ADMIN_MESSAGE'), true);
+  assert.equal(actionAllowed('siswa', 'SEND_ANNOUNCEMENT'), false);
+});

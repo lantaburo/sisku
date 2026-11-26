@@ -26,17 +26,20 @@
 
 ### 2 — Presensi dan yaumiah
 
+- Status: **native tahap awal** untuk input dan riwayat per peran.
 - Pindahkan write presensi/yaumiah ke API transaksi PostgreSQL.
 - Jalankan dual-write terbatas dan rekonsiliasi harian.
 - Uji GPS, QR, zona waktu Asia/Jakarta, serta akses siswa/orang tua.
 
 ### 3 — Tugas dan komunikasi
 
+- Status: **native tahap awal** untuk penerbitan tugas, pesan internal, dan pengumuman.
 - Migrasikan tugas, pengumpulan, pengumuman, dan pesan internal.
 - Uji otorisasi per kelas/peran dan notifikasi.
 
 ### 4 — Ujian dan nilai
 
+- Status: **native tahap awal** untuk sesi CBT, manifest soal per attempt, submit idempoten, dan nilai objektif.
 - Pindahkan paling akhir karena risikonya tertinggi.
 - Bekukan manifest soal per attempt, idempotensi submit, retry aman, dan audit nilai.
 - Lakukan simulasi beban serta gelombang kecil sebelum nilai resmi.

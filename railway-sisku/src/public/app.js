@@ -1,8 +1,6 @@
 'use strict';
 
 const $ = selector => document.querySelector(selector);
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A/exec';
-
 const ROLE_LABELS = {
   siswa: 'Siswa', ortu: 'Orang Tua', guru: 'Guru / Wali Kelas',
   kepsek: 'Kepala Sekolah', superadmin: 'Superadmin'
@@ -36,11 +34,11 @@ const ROLE_NAV = {
 };
 
 const SERVICE_FEATURES = {
-  siswa: [['📝', 'CBT Soal UAS', 'Mulai latihan atau ujian aktif sesuai kelas.'], ['✉️', 'Pesan ke Admin', 'Kirim pertanyaan atau kendala ke superadmin.'], ['📍', 'Input Presensi', 'Presensi dengan validasi QR dan lokasi.'], ['📿', 'Isi Yaumiah', 'Catat pembiasaan harian secara lengkap.']],
-  ortu: [['✍️', 'Paraf Yaumiah', 'Tinjau dan beri catatan pembinaan untuk ananda.'], ['✉️', 'Pesan ke Admin', 'Sampaikan pertanyaan kepada superadmin.'], ['⚠️', 'Komplain Nilai', 'Ajukan peninjauan nilai dengan argumentasi.']],
-  guru: [['🕌', 'Atur Yaumiah & Tahfidz', 'Kelola aktivitas dan target pembinaan kelas.'], ['📚', 'Kelola Tugas & Prestasi', 'Terbitkan tugas dan catat prestasi siswa.'], ['🚀', 'Sesi Ujian', 'Buka atau tutup CBT sesuai mapel yang diampu.'], ['✉️', 'Pesan ke Admin', 'Kirim kendala operasional ke superadmin.']],
-  kepsek: [['✉️', 'Pesan ke Admin', 'Sampaikan pesan internal ke superadmin.'], ['📊', 'Dokumen Rekap', 'Cetak dan unduh rekap sekolah dari GAS.']],
-  superadmin: [['👥', 'Akun & Impersonasi', 'Audit tampilan aplikasi sebagai akun non-admin.'], ['📜', 'Log Aktivitas', 'Tinjau aktivitas pengguna dan modul.'], ['📣', 'Pengumuman', 'Kirim informasi ke semua atau akun tertentu.'], ['📥', 'Pesan Masuk', 'Baca pesan internal dan komplain nilai.'], ['📂', 'Data Drive & Acuan', 'Akses dokumen acuan dan folder pendukung.'], ['🏛️', 'Organisasi & Impor Massal', 'Atur kop dokumen dan impor data dalam jumlah besar.']]
+  siswa: [['📝', 'CBT Soal UAS', 'Mulai ujian aktif sesuai kelas.', 'grades'], ['✉️', 'Pesan ke Admin', 'Kirim pertanyaan atau kendala ke superadmin.', 'services'], ['📍', 'Input Presensi', 'Catat kehadiran langsung di Railway.', 'attendance'], ['📿', 'Isi Yaumiah', 'Catat pembiasaan harian secara lengkap.', 'yaumiah']],
+  ortu: [['✍️', 'Paraf Yaumiah', 'Tinjau dan beri catatan pembinaan untuk ananda.', 'yaumiah'], ['✉️', 'Pesan ke Admin', 'Sampaikan pertanyaan kepada superadmin.', 'services'], ['📊', 'Nilai Anak', 'Tinjau hasil ujian ananda.', 'grades']],
+  guru: [['🕌', 'Atur Yaumiah', 'Pantau pembiasaan kelas binaan.', 'yaumiah'], ['📚', 'Kelola Tugas', 'Terbitkan tugas untuk siswa.', 'tasks'], ['🚀', 'Sesi Ujian', 'Buka atau tutup CBT sesuai mapel.', 'grades'], ['✉️', 'Pesan ke Admin', 'Kirim kendala operasional ke superadmin.', 'services']],
+  kepsek: [['✅', 'Approval Soal', 'Tinjau dan setujui soal di Railway.', 'questions'], ['✉️', 'Pesan ke Admin', 'Sampaikan pesan internal ke superadmin.', 'services'], ['📊', 'Rekap Akademik', 'Tinjau hasil ujian sekolah.', 'grades']],
+  superadmin: [['👥', 'Kelola Akun', 'Kelola akun guru, siswa, dan orang tua.', 'management'], ['📜', 'Integritas & Log', 'Pantau snapshot dan aktivitas aplikasi.', 'integration'], ['📣', 'Pengumuman', 'Kirim informasi dari Railway.', 'services'], ['📥', 'Pesan Masuk', 'Baca pesan internal pengguna.', 'services'], ['🏛️', 'Data Master', 'Kelola mapel dan kelas.', 'management'], ['📝', 'Bank Soal', 'Kelola soal dan approval.', 'questions']]
 };
 
 const ROLE_HERO = {
@@ -106,7 +104,7 @@ const state = {
   user: null, dashboard: null, overview: null, activeView: 'summary',
   masterResource: 'students', masterItems: [], tableRows: {}, loadingCount: 0,
   formOptions: null, managementResource: 'subjects', managementItems: [],
-  managementEditing: null, managementLoaded: false, nativeQuestions: []
+  managementEditing: null, managementLoaded: false, nativeQuestions: [], exams: [], activeExam: null
 };
 
 function formatNumber(value) {
@@ -282,6 +280,9 @@ function showView(name) {
     loadNativeQuestions().catch(error => toast(error.message));
     if (['guru', 'superadmin'].includes(state.user.role)) prepareQuestionForm().catch(error => toast(error.message));
   }
+  if (target === 'grades') prepareExams().catch(error => toast(error.message));
+  if (target === 'tasks' && ['guru', 'superadmin'].includes(state.user.role)) prepareOperationalOptions().catch(error => toast(error.message));
+  if (target === 'services' && state.user.role === 'superadmin') loadAdminMessages().catch(error => toast(error.message));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -311,23 +312,36 @@ function configureRole() {
   $('#today-full').textContent = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' }).format(today);
   const hero = ROLE_HERO[role] || ROLE_HERO.siswa;
   $('#hero-eyebrow').textContent = hero[0]; $('#hero-title').textContent = hero[1]; $('#hero-copy').textContent = hero[2]; $('#hero-mark').textContent = hero[3];
-  document.querySelectorAll('.operational-link').forEach(link => { link.href = GAS_URL; });
   buildNavigation();
   buildMasterTabs();
   renderServiceCards();
   $('#question-form-surface').hidden = !['guru', 'superadmin'].includes(role);
+  $('#attendance-entry-surface').hidden = !['siswa', 'guru', 'superadmin'].includes(role);
+  $('#attendance-nis-label').hidden = role === 'siswa';
+  $('#attendance-nis').required = role !== 'siswa';
+  $('#yaumiah-entry-surface').hidden = !['siswa', 'ortu'].includes(role);
+  $('#yaumiah-entry-button').hidden = !['siswa', 'ortu'].includes(role);
+  $('#yaumiah-parent-note-label').hidden = role !== 'ortu';
+  $('#task-entry-surface').hidden = !['guru', 'superadmin'].includes(role);
+  $('#task-entry-button').hidden = !['guru', 'superadmin'].includes(role);
+  $('#exam-session-form').hidden = !['guru', 'kepsek', 'superadmin'].includes(role);
+  $('#communication-title').textContent = role === 'superadmin' ? 'Kirim pengumuman' : 'Pesan ke superadmin';
+  $('#communication-form').querySelector('button').textContent = role === 'superadmin' ? 'Terbitkan pengumuman' : 'Kirim pesan';
+  const schoolToday = state.overview?.scope?.today || new Date().toISOString().slice(0, 10);
+  $('#attendance-date').value = schoolToday; $('#yaumiah-date').value = schoolToday;
 }
 
 function renderServiceCards() {
   const container = $('#service-grid');
   container.replaceChildren();
-  (SERVICE_FEATURES[state.user.role] || []).forEach(([icon, titleText, description]) => {
-    const card = document.createElement('a'); card.className = 'service-card'; card.href = GAS_URL; card.target = '_blank'; card.rel = 'noopener';
+  (SERVICE_FEATURES[state.user.role] || []).forEach(([icon, titleText, description, target]) => {
+    const card = document.createElement('button'); card.type = 'button'; card.className = 'service-card';
     const mark = document.createElement('span'); mark.textContent = icon;
     const copy = document.createElement('div'); const title = document.createElement('b'); title.textContent = titleText;
     const paragraph = document.createElement('p'); paragraph.textContent = description;
-    const action = document.createElement('small'); action.textContent = 'Buka layanan GAS ↗';
+    const action = document.createElement('small'); action.textContent = 'Buka di Railway →';
     copy.append(title, paragraph, action); card.append(mark, copy); container.append(card);
+    card.addEventListener('click', () => showView(target));
   });
 }
 
@@ -768,6 +782,87 @@ async function deleteNativeQuestion(item) {
   } catch (error) { toast(error.message); }
 }
 
+function fillSelect(select, items, includeAll = false) {
+  const current = select.value; select.replaceChildren();
+  if (includeAll) { const all = document.createElement('option'); all.value = 'SEMUA'; all.textContent = 'SEMUA'; select.append(all); }
+  items.forEach(item => { const option = document.createElement('option'); option.value = item.name || item.code; option.textContent = item.name ? `${item.code || ''} — ${item.name}`.replace(/^ — /, '') : item.code; select.append(option); });
+  if (current) select.value = current;
+}
+
+async function prepareOperationalOptions() {
+  const options = await loadFormOptions();
+  fillSelect($('#task-subject'), options.subjects || []);
+  fillSelect($('#task-class'), options.classes || [], true);
+  fillSelect($('#exam-subject'), options.subjects || []);
+  fillSelect($('#exam-class'), options.classes || [], true);
+}
+
+async function prepareExams() {
+  if (['guru', 'kepsek', 'superadmin'].includes(state.user.role)) await prepareOperationalOptions();
+  const result = await api('/api/v1/exams'); state.exams = result.items || []; renderExams();
+}
+
+function renderExams() {
+  const container = $('#native-exam-list'); container.replaceChildren();
+  if (!state.exams.length) return container.append(emptyMessage(state.user.role === 'siswa' ? 'Belum ada sesi ujian aktif untuk kelas Anda.' : 'Belum ada sesi ujian native.'));
+  state.exams.forEach(exam => {
+    const card = document.createElement('article'); card.className = 'exam-card';
+    const copy = document.createElement('div'); const title = document.createElement('b'); title.textContent = `${exam.subject} · ${exam.classCode}`;
+    const detail = document.createElement('p'); detail.textContent = `${exam.questionCount} soal · ${exam.note || 'Tanpa catatan'}`; copy.append(title, detail);
+    const actions = document.createElement('div'); actions.className = 'row-actions';
+    const status = document.createElement('span'); status.className = statusClass(exam.status); status.textContent = exam.status; actions.append(status);
+    if (state.user.role === 'siswa' && exam.status === 'OPEN') {
+      const start = document.createElement('button'); start.type = 'button'; start.className = 'small-button'; start.textContent = 'Mulai ujian'; start.disabled = !exam.questionCount; start.addEventListener('click', () => startExam(exam)); actions.append(start);
+    }
+    if (['guru', 'kepsek', 'superadmin'].includes(state.user.role) && exam.status === 'OPEN') {
+      const close = document.createElement('button'); close.type = 'button'; close.className = 'small-button danger-button'; close.textContent = 'Tutup sesi'; close.addEventListener('click', () => closeExam(exam)); actions.append(close);
+    }
+    card.append(copy, actions); container.append(card);
+  });
+}
+
+async function startExam(exam) {
+  try {
+    const result = await api(`/api/v1/exams/${encodeURIComponent(exam.id)}/start`, { method: 'POST', body: '{}' });
+    state.activeExam = { ...result, exam };
+    $('#exam-runner-title').textContent = `${result.session.subject} · ${result.session.classCode}`;
+    const list = $('#exam-question-list'); list.replaceChildren();
+    result.questions.forEach((question, index) => {
+      const card = document.createElement('fieldset'); card.className = 'exam-question'; card.dataset.questionId = question.id;
+      const legend = document.createElement('legend'); legend.textContent = `${index + 1}. ${question.question}`; card.append(legend);
+      const entries = Object.entries(question.options || {}).filter(([, option]) => option);
+      if (entries.length && ['PG', 'PGK'].includes(String(question.type).toUpperCase())) {
+        entries.forEach(([key, optionText]) => {
+          const label = document.createElement('label'); label.className = 'answer-option'; const input = document.createElement('input');
+          input.type = String(question.type).toUpperCase() === 'PGK' ? 'checkbox' : 'radio'; input.name = `answer-${question.id}`; input.value = key;
+          const span = document.createElement('span'); span.textContent = `${key}. ${optionText}`; label.append(input, span); card.append(label);
+        });
+      } else {
+        const input = document.createElement(String(question.type).toUpperCase() === 'ESAI' ? 'textarea' : 'input'); input.name = `answer-${question.id}`; input.rows = 4; card.append(input);
+      }
+      list.append(card);
+    });
+    $('#exam-runner').hidden = false; $('#exam-runner').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (error) { toast(error.message); }
+}
+
+async function closeExam(exam) {
+  if (!window.confirm(`Tutup sesi ujian ${exam.subject} untuk ${exam.classCode}?`)) return;
+  try { await nativeAction('SESI_UAS', { id: exam.id, mapel: exam.subject, kelas: exam.classCode, status: 'CLOSED' }); await prepareExams(); toast('Sesi ujian ditutup.'); }
+  catch (error) { toast(error.message); }
+}
+
+async function loadAdminMessages() {
+  const result = await api('/api/v1/messages'); const container = $('#admin-message-list'); container.replaceChildren();
+  if (!result.items?.length) return container.append(emptyMessage('Belum ada pesan masuk.'));
+  result.items.forEach(item => {
+    const card = document.createElement('article'); card.className = 'message-card';
+    const heading = document.createElement('div'); const title = document.createElement('b'); title.textContent = item.subject; const meta = document.createElement('small'); meta.textContent = `${item.sender_name || item.sender_username} · ${item.sender_role}`; heading.append(title, meta);
+    const message = document.createElement('p'); message.textContent = item.message; const badge = document.createElement('span'); badge.className = statusClass(item.status); badge.textContent = item.status;
+    card.append(heading, badge, message); container.append(card);
+  });
+}
+
 function renderAll() {
   $('#school-name').textContent = state.dashboard.appName || 'SISKU';
   configureRole(); renderSummary(); renderOperationalViews(); renderIntegration();
@@ -790,6 +885,10 @@ function showDashboard() {
 
 document.querySelectorAll('[data-view-link]').forEach(element => {
   element.addEventListener('click', event => { event.preventDefault(); showView(element.dataset.viewLink); });
+});
+
+document.querySelectorAll('[data-scroll-to]').forEach(button => {
+  button.addEventListener('click', () => document.getElementById(button.dataset.scrollTo)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 });
 
 document.querySelectorAll('[data-table-filter]').forEach(input => {
@@ -842,6 +941,69 @@ let masterSearchTimer;
 $('#master-search').addEventListener('input', event => {
   window.clearTimeout(masterSearchTimer);
   masterSearchTimer = window.setTimeout(() => loadMaster(state.masterResource, event.target.value).catch(error => toast(error.message)), 280);
+});
+
+$('#attendance-form').addEventListener('submit', async event => {
+  event.preventDefault(); const message = $('#attendance-message'); const button = event.currentTarget.querySelector('button'); message.textContent = ''; button.disabled = true;
+  try {
+    const result = await nativeAction('PRESENSI', { nis: $('#attendance-nis').value, tanggal: $('#attendance-date').value, status: $('#attendance-status').value });
+    await loadDashboard(); showView('attendance'); toast(result.message);
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+$('#yaumiah-form').addEventListener('submit', async event => {
+  event.preventDefault(); const message = $('#yaumiah-form-message'); const button = event.currentTarget.querySelector('button'); message.textContent = ''; button.disabled = true;
+  try {
+    const result = await nativeAction('YAUMIAH', { tanggal: $('#yaumiah-date').value, capaian: $('#yaumiah-achievement').value, bacaan: $('#yaumiah-reading').value, catatanOrtu: $('#yaumiah-parent-note').value });
+    await loadDashboard(); showView('yaumiah'); toast(result.message);
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+$('#task-form').addEventListener('submit', async event => {
+  event.preventDefault(); const message = $('#task-form-message'); const button = event.currentTarget.querySelector('button'); message.textContent = ''; button.disabled = true;
+  try {
+    const result = await nativeAction('TUGAS', { mapel: $('#task-subject').value, kelas: $('#task-class').value, judul: $('#task-title').value, deskripsi: $('#task-description').value, deadline: $('#task-deadline').value || null });
+    event.currentTarget.reset(); await loadDashboard(); showView('tasks'); toast(result.message);
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+$('#exam-session-form').addEventListener('submit', async event => {
+  event.preventDefault(); const button = event.currentTarget.querySelector('button'); button.disabled = true; $('#exam-message').textContent = '';
+  try {
+    const result = await nativeAction('SESI_UAS', { mapel: $('#exam-subject').value, kelas: $('#exam-class').value, catatan: $('#exam-note').value, status: 'OPEN', acakSoal: true });
+    await prepareExams(); toast(result.message);
+  } catch (error) { $('#exam-message').textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+$('#exam-cancel').addEventListener('click', () => { $('#exam-runner').hidden = true; state.activeExam = null; });
+$('#exam-answer-form').addEventListener('submit', async event => {
+  event.preventDefault(); if (!state.activeExam || !window.confirm('Kumpulkan jawaban sekarang? Jawaban tidak dapat diubah lagi.')) return;
+  const answers = {};
+  $('#exam-question-list').querySelectorAll('.exam-question').forEach(card => {
+    const controls = Array.from(card.querySelectorAll('input, textarea')); const checked = controls.filter(control => !['radio', 'checkbox'].includes(control.type) || control.checked).map(control => control.value.trim()).filter(Boolean);
+    answers[card.dataset.questionId] = checked.join(',');
+  });
+  const button = event.currentTarget.querySelector('button[type="submit"]'); button.disabled = true; $('#exam-submit-message').textContent = '';
+  try {
+    const result = await api(`/api/v1/exams/${encodeURIComponent(state.activeExam.session.id)}/submit`, { method: 'POST', body: JSON.stringify({ answers }) });
+    $('#exam-submit-message').textContent = `${result.message} Nilai objektif: ${result.result.score}.`;
+    toast(result.message); await loadDashboard();
+  } catch (error) { $('#exam-submit-message').textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+$('#communication-form').addEventListener('submit', async event => {
+  event.preventDefault(); const message = $('#communication-form-message'); const button = event.currentTarget.querySelector('button'); message.textContent = ''; button.disabled = true;
+  try {
+    const action = state.user.role === 'superadmin' ? 'SEND_ANNOUNCEMENT' : 'SEND_ADMIN_MESSAGE';
+    const result = await nativeAction(action, { judul: $('#communication-subject').value, pesan: $('#communication-message').value, targets: ['SEMUA'] });
+    event.currentTarget.reset(); toast(result.message); if (state.user.role === 'superadmin') await loadDashboard();
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; }
 });
 
 $('#management-form').addEventListener('submit', async event => {

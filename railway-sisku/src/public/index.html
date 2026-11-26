@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=2.33">
-  <script src="/assets/app.js?v=2.33" defer></script>
+  <link rel="stylesheet" href="/assets/styles.css?v=2.34">
+  <script src="/assets/app.js?v=2.34" defer></script>
 </head>
 <body>
   <div id="loading-bar" class="loading-bar" hidden><span></span></div>
@@ -70,29 +70,34 @@
       </section>
 
       <section id="attendance-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Presensi sekolah</span><h2 id="attendance-title">Riwayat kehadiran</h2><p id="attendance-copy">Data terbaru sesuai cakupan akun.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka presensi di GAS</a></div>
+        <div class="page-heading"><div><span>Presensi sekolah</span><h2 id="attendance-title">Riwayat kehadiran</h2><p id="attendance-copy">Data terbaru sesuai cakupan akun.</p></div><button class="primary-button compact" type="button" data-scroll-to="attendance-entry-surface">Catat presensi</button></div>
+        <section id="attendance-entry-surface" class="surface form-surface"><div class="section-heading"><div><span>Input native</span><h2>Catat presensi</h2></div><span class="soft-badge">Railway</span></div><form id="attendance-form" class="data-form"><label id="attendance-nis-label">NIS siswa<input id="attendance-nis" maxlength="40"></label><div class="form-grid two"><label>Tanggal<input id="attendance-date" type="date" required></label><label>Status<select id="attendance-status"><option>Hadir</option><option>Izin</option><option>Sakit</option><option>Alpa</option></select></label></div><div id="attendance-message" class="form-message"></div><button class="primary-button compact" type="submit">Simpan presensi</button></form></section>
         <section class="surface"><div class="table-toolbar"><input class="table-search" data-table-filter="attendance-table" type="search" placeholder="Cari nama, NIS, atau status…"><span id="attendance-count" class="soft-badge">0 data</span></div><div id="attendance-table" class="table-wrap large-table"></div></section>
       </section>
 
       <section id="yaumiah-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Pembiasaan karakter</span><h2 id="yaumiah-title">Monitoring Yaumiah</h2><p id="yaumiah-copy">Capaian ibadah harian, tilawah, dan murajaah.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka Yaumiah di GAS</a></div>
+        <div class="page-heading"><div><span>Pembiasaan karakter</span><h2 id="yaumiah-title">Monitoring Yaumiah</h2><p id="yaumiah-copy">Capaian ibadah harian, tilawah, dan murajaah.</p></div><button id="yaumiah-entry-button" class="primary-button compact" type="button" data-scroll-to="yaumiah-entry-surface">Isi Yaumiah</button></div>
+        <section id="yaumiah-entry-surface" class="surface form-surface"><div class="section-heading"><div><span>Input native</span><h2>Catatan Yaumiah harian</h2></div><span class="soft-badge">Railway</span></div><form id="yaumiah-form" class="data-form"><div class="form-grid two"><label>Tanggal<input id="yaumiah-date" type="date" required></label><label>Capaian (%)<input id="yaumiah-achievement" type="number" min="0" max="100" required></label></div><label>Tilawah / murajaah<textarea id="yaumiah-reading" rows="3" maxlength="1000"></textarea></label><label id="yaumiah-parent-note-label">Catatan orang tua<textarea id="yaumiah-parent-note" rows="3" maxlength="2000"></textarea></label><div id="yaumiah-form-message" class="form-message"></div><button class="primary-button compact" type="submit">Simpan Yaumiah</button></form></section>
         <div id="yaumiah-cards" class="mini-stat-grid"></div>
         <section class="surface"><div class="table-toolbar"><input class="table-search" data-table-filter="yaumiah-table" type="search" placeholder="Cari nama, NIS, atau tanggal…"><span id="yaumiah-count" class="soft-badge">0 data</span></div><div id="yaumiah-table" class="table-wrap large-table"></div></section>
       </section>
 
       <section id="tasks-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Kegiatan siswa</span><h2 id="tasks-title">Tugas & prestasi</h2><p>Tugas kelas dan pencapaian siswa dalam satu halaman.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Kelola di GAS</a></div>
+        <div class="page-heading"><div><span>Kegiatan siswa</span><h2 id="tasks-title">Tugas & prestasi</h2><p>Tugas kelas dan pencapaian siswa dalam satu halaman.</p></div><button id="task-entry-button" class="primary-button compact" type="button" data-scroll-to="task-entry-surface">Buat tugas</button></div>
+        <section id="task-entry-surface" class="surface"><div class="section-heading"><div><span>Kelola tugas native</span><h2>Terbitkan tugas kelas</h2></div><span class="soft-badge">Railway</span></div><form id="task-form" class="data-form"><div class="form-grid three"><label>Mapel<select id="task-subject" required></select></label><label>Kelas<select id="task-class" required></select></label><label>Deadline<input id="task-deadline" type="datetime-local"></label></div><label>Judul<input id="task-title" maxlength="300" required></label><label>Deskripsi<textarea id="task-description" rows="4" maxlength="5000"></textarea></label><div id="task-form-message" class="form-message"></div><button class="primary-button compact" type="submit">Terbitkan tugas</button></form></section>
         <div class="two-column"><section class="surface"><div class="section-heading"><div><span>Agenda kelas</span><h2>Daftar tugas</h2></div><span id="task-count" class="soft-badge">0 tugas</span></div><div id="task-table" class="table-wrap large-table"></div></section><section class="surface"><div class="section-heading"><div><span>Apresiasi</span><h2>Prestasi siswa</h2></div><span id="achievement-count" class="soft-badge">0 prestasi</span></div><div id="achievement-table" class="table-wrap large-table"></div></section></div>
       </section>
 
       <section id="grades-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Ujian & akademik</span><h2 id="grades-title">Nilai ujian</h2><p id="grades-copy">Riwayat nilai yang dapat dilihat oleh akun Anda.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka ujian di GAS</a></div>
+        <div class="page-heading"><div><span>Ujian & akademik</span><h2 id="grades-title">Nilai ujian</h2><p id="grades-copy">Riwayat nilai yang dapat dilihat oleh akun Anda.</p></div><button class="primary-button compact" type="button" data-scroll-to="native-exam-surface">Buka ujian</button></div>
+        <section id="native-exam-surface" class="surface"><div class="section-heading"><div><span>CBT native</span><h2>Sesi ujian Railway</h2></div><span class="soft-badge">Tanpa GAS</span></div><form id="exam-session-form" class="data-form"><div class="form-grid three"><label>Mapel<select id="exam-subject" required></select></label><label>Kelas<select id="exam-class" required></select></label><label>Catatan<input id="exam-note" maxlength="1000"></label></div><button class="primary-button compact" type="submit">Buka sesi ujian</button></form><div id="native-exam-list" class="exam-list"></div><div id="exam-message" class="form-message"></div></section>
+        <section id="exam-runner" class="surface exam-runner" hidden><div class="section-heading"><div><span>Ujian berlangsung</span><h2 id="exam-runner-title">CBT</h2></div><button id="exam-cancel" class="secondary-button compact" type="button">Tutup tampilan</button></div><form id="exam-answer-form" class="data-form"><div id="exam-question-list" class="exam-question-list"></div><div id="exam-submit-message" class="form-message"></div><button class="primary-button" type="submit">Kumpulkan jawaban</button></form></section>
         <div id="grade-cards" class="mini-stat-grid"></div>
         <section class="surface"><div class="table-toolbar"><input class="table-search" data-table-filter="grade-table" type="search" placeholder="Cari siswa, mapel, atau status…"><span id="grade-count" class="soft-badge">0 nilai</span></div><div id="grade-table" class="table-wrap large-table"></div></section>
       </section>
 
       <section id="questions-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Bank soal UAS</span><h2 id="questions-title">Kesiapan soal & sesi</h2><p id="questions-copy">Buat soal langsung di Railway; data tersimpan secara native di PostgreSQL.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Referensi versi GAS</a></div>
+        <div class="page-heading"><div><span>Bank soal UAS</span><h2 id="questions-title">Kesiapan soal & sesi</h2><p id="questions-copy">Buat soal langsung di Railway; data tersimpan secara native di PostgreSQL.</p></div></div>
         <section id="question-form-surface" class="surface">
           <div class="section-heading"><div><span>Pembuatan soal</span><h2>Tambah soal UAS</h2></div><span class="soft-badge">PostgreSQL native</span></div>
           <form id="question-form" class="data-form">
@@ -108,7 +113,7 @@
       </section>
 
       <section id="management-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Superadmin</span><h2>Kelola data sekolah</h2><p>Tambah, ubah, dan nonaktifkan mapel, kelas, akun guru, siswa, serta orang tua langsung di PostgreSQL Railway.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Referensi versi GAS</a></div>
+        <div class="page-heading"><div><span>Superadmin</span><h2>Kelola data sekolah</h2><p>Tambah, ubah, dan nonaktifkan mapel, kelas, akun guru, siswa, serta orang tua langsung di PostgreSQL Railway.</p></div></div>
         <div id="management-tabs" class="tab-row"></div>
         <div class="management-layout">
           <section class="surface management-editor"><div class="section-heading"><div><span id="management-form-eyebrow">Data baru</span><h2 id="management-form-title">Tambah data</h2></div></div><form id="management-form" class="data-form"><div id="management-form-fields" class="form-grid"></div><div id="management-message" class="form-message" role="alert"></div><div class="form-actions"><button id="management-save" class="primary-button compact" type="submit">Simpan</button><button id="management-cancel" class="secondary-button compact" type="button">Batal</button></div></form></section>
@@ -117,12 +122,13 @@
       </section>
 
       <section id="services-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Layanan sesuai peran</span><h2>Fitur lengkap SISKU</h2><p>Modul yang belum native sedang dipindahkan bertahap. Selama masa migrasi, layanan lamanya tetap dapat dipakai tanpa kehilangan data.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Buka aplikasi lama</a></div>
+        <div class="page-heading"><div><span>Layanan sesuai peran</span><h2>Fitur lengkap SISKU</h2><p>Semua kartu di bawah membuka fitur di dalam aplikasi Railway.</p></div></div>
         <div id="service-grid" class="service-grid"></div>
+        <section id="communication-surface" class="surface"><div class="section-heading"><div><span>Komunikasi native</span><h2 id="communication-title">Pesan internal</h2></div><span class="soft-badge">Railway</span></div><form id="communication-form" class="data-form"><label>Judul<input id="communication-subject" maxlength="120" required></label><label>Pesan<textarea id="communication-message" rows="6" maxlength="5000" required></textarea></label><div id="communication-form-message" class="form-message"></div><button class="primary-button compact" type="submit">Kirim</button></form><div id="admin-message-list" class="message-list"></div></section>
       </section>
 
       <section id="master-panel" class="view-panel" hidden>
-        <div class="page-heading"><div><span>Data sekolah</span><h2 id="master-title">Direktori sekolah</h2><p>Data native ditampilkan tanpa PIN dan dibatasi menurut peran.</p></div><a class="gas-button operational-link" href="#" target="_blank" rel="noopener">Lihat data lama</a></div>
+        <div class="page-heading"><div><span>Data sekolah</span><h2 id="master-title">Direktori sekolah</h2><p>Data native ditampilkan tanpa PIN dan dibatasi menurut peran.</p></div></div>
         <section class="surface"><div id="master-tabs" class="tab-row"></div><div class="table-toolbar"><input id="master-search" type="search" placeholder="Cari data master…"><span id="master-count" class="soft-badge">0 data</span></div><div id="master-table" class="table-wrap large-table"></div></section>
       </section>
 
@@ -139,7 +145,7 @@
     </main>
 
     <nav id="bottom-navigation" class="bottom-navigation" aria-label="Menu seluler"></nav>
-    <footer class="app-footer"><span>SISKU Railway v2.33</span><span>Data master, akun, dan bank soal dikelola native di PostgreSQL</span></footer>
+    <footer class="app-footer"><span>SISKU Railway v2.34</span><span>Operasional inti berjalan native di PostgreSQL Railway</span></footer>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

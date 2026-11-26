@@ -11,7 +11,8 @@ Migrasi dilakukan bertahap dengan snapshot Google Sheets yang tetap **read-only*
 - hash PIN `v1$...` milik GAS tetap dapat dipakai, lalu ditingkatkan di Railway setelah login berhasil;
 - mapel, kelas, akun guru/siswa/orang tua, dan bank soal sudah memiliki tabel serta write native PostgreSQL;
 - data yang sudah dikelola native ditandai sehingga sinkronisasi transisi tidak dapat menimpanya;
-- modul lain tetap memakai snapshot atau aplikasi lama sampai dipindahkan satu per satu.
+- presensi, Yaumiah, tugas, komunikasi, sesi ujian, dan CBT objektif sudah memiliki write native awal;
+- snapshot GAS tetap dipakai sebagai arsip migrasi sampai rekonsiliasi final selesai.
 
 ## Menjalankan lokal
 
@@ -87,4 +88,4 @@ Railway menjalankan pre-deploy sebelum aplikasi baru aktif; kegagalan migrasi ak
 
 ## Batas tahap ini
 
-CRUD data master/akun dan pembuatan bank soal sudah native. Presensi, yaumiah, tugas, komunikasi, pelaksanaan CBT, approval, dan penilaian masih dipindahkan bertahap. Jangan menonaktifkan GAS sebelum checklist cutover di [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) selesai.
+CRUD data master/akun, bank soal dan approval, presensi, Yaumiah, tugas, pesan/pengumuman, sesi ujian, serta CBT objektif sudah native. Tahap berikutnya memperdalam penilaian esai, komplain nilai, prestasi, pengaturan organisasi, dan rekonsiliasi final. Jangan menonaktifkan GAS sebelum checklist cutover di [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) selesai.

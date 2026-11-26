@@ -9,10 +9,13 @@ const ROLE_ACTIONS = Object.freeze({
     'REGISTER_KELAS', 'UPDATE_KELAS', 'DELETE_KELAS',
     'REGISTER_GURU', 'UPDATE_GURU', 'DELETE_GURU',
     'REGISTER_SISWA', 'UPDATE_SISWA', 'DELETE_SISWA',
-    'SOAL_UAS', 'DELETE_SOAL', 'UPDATE_APPROVAL_SOAL'
+    'SOAL_UAS', 'DELETE_SOAL', 'UPDATE_APPROVAL_SOAL',
+    'TUGAS', 'SESI_UAS', 'SEND_ANNOUNCEMENT', 'MARK_ADMIN_MESSAGE_READ', 'PRESENSI'
   ]),
-  guru: new Set(['SOAL_UAS', 'DELETE_SOAL']),
-  kepsek: new Set(['UPDATE_APPROVAL_SOAL', 'DELETE_SOAL']), siswa: new Set([]), ortu: new Set([])
+  guru: new Set(['SOAL_UAS', 'DELETE_SOAL', 'TUGAS', 'SESI_UAS', 'PRESENSI', 'SEND_ADMIN_MESSAGE']),
+  kepsek: new Set(['UPDATE_APPROVAL_SOAL', 'DELETE_SOAL', 'SESI_UAS', 'SEND_ADMIN_MESSAGE']),
+  siswa: new Set(['PRESENSI', 'YAUMIAH', 'SEND_ADMIN_MESSAGE']),
+  ortu: new Set(['YAUMIAH', 'SEND_ADMIN_MESSAGE'])
 });
 
 function actionAllowed(role, action) {
@@ -34,6 +37,12 @@ function validPin(value, optional = false) {
   if (optional && !pin) return '';
   if (!/^\d{6,12}$/.test(pin)) throw new Error('PIN wajib terdiri dari 6–12 digit angka.');
   return pin;
+}
+
+function jakartaDate() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const part = type => parts.find(item => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
 async function assertClass(client, code) {
@@ -211,6 +220,88 @@ async function runNativeAction(pool, user, action, data) {
       if (!users.rowCount) throw new Error('Siswa tidak ditemukan.');
       await client.query('UPDATE user_sessions SET revoked_at = now() WHERE user_id = ANY($1::uuid[]) AND revoked_at IS NULL', [users.rows.map(row => row.id)]);
       message = 'Akun siswa dan orang tua dinonaktifkan tanpa menghapus riwayat.';
+    } else if (action === 'PRESENSI') {
+      let nis = user.student_nis || user.username;
+      if (['guru', 'superadmin'].includes(user.role)) nis = clean(data.nis, 40);
+      if (!nis) throw new Error('NIS siswa wajib diisi.');
+      const student = await client.query("SELECT full_name, class_code FROM app_users WHERE role = 'siswa' AND student_nis = $1 AND active = true", [nis]);
+      if (!student.rowCount) throw new Error('Siswa tidak ditemukan.');
+      if (user.role === 'guru' && user.class_code && user.class_code !== '-' && student.rows[0].class_code !== user.class_code) throw new Error('Guru hanya dapat mencatat siswa kelas binaan.');
+      const schoolDate = clean(data.tanggal, 10) || jakartaDate();
+      const status = clean(data.status, 30) || 'Hadir';
+      await client.query(
+        `INSERT INTO native_attendance(id, school_date, student_nis, student_name, status, recorded_by)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (school_date, student_nis) DO UPDATE SET status = EXCLUDED.status, check_in_at = now(), recorded_by = EXCLUDED.recorded_by, updated_at = now()`,
+        [crypto.randomUUID(), schoolDate, nis, student.rows[0].full_name, status, user.id]
+      );
+      message = 'Presensi berhasil disimpan langsung di Railway.';
+    } else if (action === 'YAUMIAH') {
+      const nis = user.student_nis || (user.role === 'siswa' ? user.username : '');
+      if (!nis) throw new Error('Akun belum terhubung ke NIS siswa.');
+      const student = await client.query("SELECT full_name, class_code FROM app_users WHERE role = 'siswa' AND student_nis = $1 AND active = true", [nis]);
+      if (!student.rowCount) throw new Error('Siswa tidak ditemukan.');
+      const schoolDate = clean(data.tanggal, 10) || jakartaDate();
+      const achievement = Math.max(0, Math.min(100, Number(data.capaian) || 0));
+      await client.query(
+        `INSERT INTO native_yaumiah(id, school_date, student_nis, student_name, class_code, achievement, reading, parent_note, recorded_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (school_date, student_nis) DO UPDATE SET achievement = EXCLUDED.achievement, reading = EXCLUDED.reading,
+           parent_note = CASE WHEN EXCLUDED.parent_note = '' THEN native_yaumiah.parent_note ELSE EXCLUDED.parent_note END,
+           recorded_by = EXCLUDED.recorded_by, updated_at = now()`,
+        [crypto.randomUUID(), schoolDate, nis, student.rows[0].full_name, student.rows[0].class_code, achievement, clean(data.bacaan, 1000), clean(data.catatanOrtu, 2000), user.id]
+      );
+      message = 'Catatan Yaumiah berhasil disimpan langsung di Railway.';
+    } else if (action === 'TUGAS') {
+      required(data, ['mapel', 'kelas', 'judul']);
+      await assertTeacherSubject(client, user, clean(data.mapel, 160));
+      const id = clean(data.id, 80) || `TUGAS-${Date.now()}`;
+      await client.query(
+        `INSERT INTO native_tasks(id, subject, class_code, title, description, deadline, status, created_by, creator_username)
+         VALUES ($1,$2,$3,$4,$5,$6,'Aktif',$7,$8)`,
+        [id, clean(data.mapel, 160), clean(data.kelas, 40), clean(data.judul, 300), clean(data.deskripsi, 5000), data.deadline || null, user.id, user.username]
+      );
+      message = 'Tugas berhasil diterbitkan langsung dari Railway.';
+    } else if (action === 'SESI_UAS') {
+      required(data, ['mapel', 'kelas']);
+      const subject = clean(data.mapel, 160); await assertTeacherSubject(client, user, subject);
+      const status = clean(data.status, 20).toUpperCase() === 'OPEN' ? 'OPEN' : 'CLOSED';
+      if (status === 'OPEN') {
+        await client.query(
+          `INSERT INTO native_exam_sessions(id, subject, class_code, note, status, shuffle_questions, created_by, opened_at)
+           VALUES ($1,$2,$3,$4,'OPEN',$5,$6,now())`,
+          [crypto.randomUUID(), subject, clean(data.kelas, 40) || 'SEMUA', clean(data.catatan, 1000), data.acakSoal !== false, user.id]
+        );
+        message = 'Sesi ujian berhasil dibuka di Railway.';
+      } else {
+        const result = data.id
+          ? await client.query("UPDATE native_exam_sessions SET status = 'CLOSED', closed_at = now(), updated_at = now() WHERE id = $1 AND status = 'OPEN'", [clean(data.id, 80)])
+          : await client.query("UPDATE native_exam_sessions SET status = 'CLOSED', closed_at = now(), updated_at = now() WHERE subject = $1 AND class_code = $2 AND status = 'OPEN'", [subject, clean(data.kelas, 40) || 'SEMUA']);
+        if (!result.rowCount) throw new Error('Sesi ujian aktif tidak ditemukan.');
+        message = 'Sesi ujian berhasil ditutup.';
+      }
+    } else if (action === 'SEND_ANNOUNCEMENT') {
+      required(data, ['judul', 'pesan']);
+      const targets = Array.isArray(data.targets) && data.targets.length ? data.targets.map(item => clean(item, 120)) : ['SEMUA'];
+      await client.query(
+        `INSERT INTO native_announcements(id,title,message,targets,created_by,creator_name)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [crypto.randomUUID(), clean(data.judul, 120), clean(data.pesan, 3000), targets, user.id, user.full_name || user.username]
+      );
+      message = 'Pengumuman berhasil diterbitkan.';
+    } else if (action === 'SEND_ADMIN_MESSAGE') {
+      required(data, ['judul', 'pesan']);
+      await client.query(
+        `INSERT INTO native_messages(id,sender_id,sender_username,sender_name,sender_role,subject,message)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [crypto.randomUUID(), user.id, user.username, user.full_name || '', user.role, clean(data.judul, 120), clean(data.pesan, 5000)]
+      );
+      message = 'Pesan berhasil dikirim ke superadmin.';
+    } else if (action === 'MARK_ADMIN_MESSAGE_READ') {
+      required(data, ['id']);
+      const result = await client.query("UPDATE native_messages SET status = 'SUDAH DIBACA', read_at = now(), read_by = $1 WHERE id = $2", [user.id, clean(data.id, 80)]);
+      if (!result.rowCount) throw new Error('Pesan tidak ditemukan.');
+      message = 'Pesan ditandai sudah dibaca.';
     } else if (action === 'SOAL_UAS') {
       required(data, ['id', 'mapel', 'kelas', 'pertanyaan']);
       const subject = clean(data.mapel, 160); await assertSubject(client, subject); await assertTeacherSubject(client, user, subject);

@@ -45,8 +45,13 @@ test('Railway menyediakan pembuatan soal dan CRUD master native PostgreSQL', () 
   assert.doesNotMatch(js, /GAS_SESSION_REQUIRED/);
 });
 
-test('aksi operasional diarahkan ke GAS dan data dirender tanpa innerHTML', () => {
-  assert.match(js, /const GAS_URL = 'https:\/\/script\.google\.com\/macros\/s\//);
-  assert.match(html, /class="gas-button operational-link"/);
+test('aksi operasional berjalan native tanpa tautan kerja ke GAS', () => {
+  assert.doesNotMatch(js, /const GAS_URL/);
+  assert.doesNotMatch(html, /operational-link/);
+  assert.match(html, /id="native-exam-surface"/);
+  assert.match(html, /id="attendance-form"/);
+  assert.match(html, /id="yaumiah-form"/);
+  assert.match(html, /id="task-form"/);
+  assert.match(html, /id="communication-form"/);
   assert.doesNotMatch(js, /\.innerHTML\s*=/);
 });
