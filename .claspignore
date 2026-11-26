@@ -1,12 +1,18 @@
 # Abaikan folder app/ (Node.js local server, tidak perlu di Apps Script)
 app/
 app/**
+railway-sisku/
+railway-sisku/**
 scripts/
 scripts/**
 
 # Abaikan file sistem & package
 package.json
 package-lock.json
+Dockerfile
+PRODUCTION_RUNBOOK.md
+.dockerignore
+.gitignore
 .DS_Store
 node_modules/
 *.log
