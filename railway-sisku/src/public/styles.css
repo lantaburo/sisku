@@ -154,6 +154,10 @@ label { display: block; margin: 0 0 8px; color: var(--slate-700); font-size: .87
 .data-table td { max-width: 310px; padding: 12px 9px; border-top: 1px solid #edf2f0; color: var(--slate-600); vertical-align: top; }
 .data-table tr:hover td { background: #f8fbfa; }
 .data-table td:first-child { color: var(--slate-700); font-weight: 700; }
+.question-data-table td:nth-child(2) { min-width: 330px; white-space: normal; }
+.question-data-table td b, .question-data-table td small { display: block; }
+.question-data-table td small { margin-top: 5px; color: var(--slate-500); font-size: .69rem; font-weight: 500; line-height: 1.5; }
+.question-data-table .revision-note { max-width: 210px; color: #be123c; }
 .score-cell { color: var(--emerald-700) !important; font-size: .9rem; font-weight: 800 !important; }
 .status-chip { display: inline-flex; padding: 4px 8px; border-radius: 999px; color: #166534; background: #dcfce7; font-size: .72rem; font-weight: 800; white-space: nowrap; }
 .status-chip.pending { color: #92400e; background: #fef3c7; }

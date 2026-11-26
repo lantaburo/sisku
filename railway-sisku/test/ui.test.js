@@ -36,8 +36,9 @@ test('semua panel navigasi utama tersedia dan tidak memakai tombol menu disabled
 
 test('Railway menyediakan pembuatan soal dan CRUD master native PostgreSQL', () => {
   assert.match(html, /id="question-form"/);
+  assert.match(html, /id="native-question-table"/);
   assert.match(html, /id="management-form"/);
-  for (const action of ['REGISTER_MAPEL', 'UPDATE_MAPEL', 'DELETE_MAPEL', 'REGISTER_KELAS', 'REGISTER_GURU', 'REGISTER_SISWA', 'SOAL_UAS']) {
+  for (const action of ['REGISTER_MAPEL', 'UPDATE_MAPEL', 'DELETE_MAPEL', 'REGISTER_KELAS', 'REGISTER_GURU', 'REGISTER_SISWA', 'SOAL_UAS', 'UPDATE_APPROVAL_SOAL']) {
     assert.match(js, new RegExp(action));
   }
   assert.match(js, /\/api\/v1\/native\/action/);

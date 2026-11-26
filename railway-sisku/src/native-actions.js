@@ -9,10 +9,10 @@ const ROLE_ACTIONS = Object.freeze({
     'REGISTER_KELAS', 'UPDATE_KELAS', 'DELETE_KELAS',
     'REGISTER_GURU', 'UPDATE_GURU', 'DELETE_GURU',
     'REGISTER_SISWA', 'UPDATE_SISWA', 'DELETE_SISWA',
-    'SOAL_UAS', 'UPDATE_SOAL', 'DELETE_SOAL'
+    'SOAL_UAS', 'DELETE_SOAL', 'UPDATE_APPROVAL_SOAL'
   ]),
-  guru: new Set(['SOAL_UAS', 'UPDATE_SOAL', 'DELETE_SOAL']),
-  kepsek: new Set([]), siswa: new Set([]), ortu: new Set([])
+  guru: new Set(['SOAL_UAS', 'DELETE_SOAL']),
+  kepsek: new Set(['UPDATE_APPROVAL_SOAL', 'DELETE_SOAL']), siswa: new Set([]), ortu: new Set([])
 });
 
 function actionAllowed(role, action) {
@@ -231,6 +231,26 @@ async function runNativeAction(pool, user, action, data) {
           type, clean(data.catatanRevisi, 2000), clean(data.gambarUrl, 2000), user.username, user.id]
       );
       message = 'Soal berhasil disimpan ke PostgreSQL dan diajukan untuk approval.';
+    } else if (action === 'UPDATE_APPROVAL_SOAL') {
+      required(data, ['id']);
+      const status = clean(data.statusApproval || data.status, 80);
+      if (!['Approved', 'Perlu Revisi', 'Menunggu Approval Kepsek'].includes(status)) throw new Error('Status approval tidak valid.');
+      const result = await client.query(
+        `UPDATE school_questions SET approval_status = $1, revision_note = $2, updated_at = now()
+          WHERE id = $3 AND active = true`,
+        [status, clean(data.catatanRevisi || data.catatan, 2000), clean(data.id, 80)]
+      );
+      if (!result.rowCount) throw new Error('Soal tidak ditemukan.');
+      message = status === 'Approved' ? 'Soal berhasil disetujui.' : 'Status soal berhasil diperbarui.';
+    } else if (action === 'DELETE_SOAL') {
+      required(data, ['id']);
+      const question = await client.query('SELECT creator_username FROM school_questions WHERE id = $1 AND active = true FOR UPDATE', [clean(data.id, 80)]);
+      if (!question.rowCount) throw new Error('Soal tidak ditemukan.');
+      if (user.role === 'guru' && String(question.rows[0].creator_username).toLowerCase() !== String(user.username).toLowerCase()) {
+        const denied = new Error('Guru hanya dapat menonaktifkan soal yang dibuat sendiri.'); denied.status = 403; throw denied;
+      }
+      await client.query('UPDATE school_questions SET active = false, updated_at = now() WHERE id = $1', [clean(data.id, 80)]);
+      message = 'Soal dinonaktifkan tanpa menghapus riwayat.';
     } else {
       throw new Error('Aksi native belum tersedia.');
     }

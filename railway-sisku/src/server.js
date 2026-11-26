@@ -580,6 +580,41 @@ app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'kep
   }
 });
 
+app.get('/api/v1/questions', requireAuth, requireRoles('superadmin', 'kepsek', 'guru'), async (req, res, next) => {
+  try {
+    const params = [];
+    let ownerClause = '';
+    if (req.user.role === 'guru') {
+      params.push(req.user.username.toLowerCase());
+      ownerClause = 'AND lower(creator_username) = $1';
+    }
+    const result = await db().query(
+      `SELECT id, subject, class_code, cognitive_level, competency, question_text, options,
+              answer_key, approval_status, question_type, revision_note, image_url,
+              creator_username, created_at, updated_at
+         FROM school_questions
+        WHERE active = true ${ownerClause}
+        ORDER BY updated_at DESC, id
+        LIMIT 500`,
+      params
+    );
+    res.json({
+      status: 'ok',
+      total: result.rowCount,
+      items: result.rows.map(row => ({
+        id: row.id, subject: row.subject, classCode: row.class_code,
+        level: row.cognitive_level, competency: row.competency,
+        question: row.question_text, options: row.options || {}, answerKey: row.answer_key,
+        status: row.approval_status, type: row.question_type,
+        revisionNote: row.revision_note, imageUrl: row.image_url,
+        creator: row.creator_username, updatedAt: row.updated_at
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
   try {
     const latest = await db().query(

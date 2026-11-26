@@ -16,4 +16,6 @@ test('pembuatan soal native tersedia untuk guru dan superadmin', () => {
   assert.equal(actionAllowed('superadmin', 'SOAL_UAS'), true);
   assert.equal(actionAllowed('siswa', 'SOAL_UAS'), false);
   assert.equal(actionAllowed('ortu', 'SOAL_UAS'), false);
+  assert.equal(actionAllowed('kepsek', 'UPDATE_APPROVAL_SOAL'), true);
+  assert.equal(actionAllowed('guru', 'UPDATE_APPROVAL_SOAL'), false);
 });
