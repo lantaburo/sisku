@@ -632,6 +632,10 @@ app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'kep
       } else if (resource === 'teachers') {
         const result = await db().query(`SELECT p.nip, p.subjects, p.homeroom_class, u.username, u.full_name FROM teacher_profiles p JOIN app_users u ON u.id = p.user_id WHERE p.active = true AND u.active = true ORDER BY u.full_name`);
         items = result.rows.map(row => ({ nip: row.nip, username: row.username, name: row.full_name, subjects: row.subjects, classCode: row.homeroom_class }));
+      } else if (resource === 'parents') {
+        if (req.user.role !== 'superadmin') return res.status(403).json({ status: 'error', message: 'Direktori orang tua hanya tersedia untuk superadmin.' });
+        const result = await db().query(`SELECT username, full_name, class_code, student_nis FROM app_users WHERE active=true AND role='ortu' ORDER BY class_code,full_name`);
+        items = result.rows.map(row => ({ username: row.username, name: row.full_name, classCode: row.class_code, nis: row.student_nis }));
       } else if (resource === 'subjects') {
         const result = await db().query('SELECT code, name, subject_group FROM school_subjects WHERE active = true ORDER BY name');
         items = result.rows.map(row => ({ code: row.code, name: row.name, group: row.subject_group }));

@@ -91,6 +91,10 @@ const MASTER_COLUMNS = {
     { label: 'NIP', key: 'nip' }, { label: 'Nama guru', key: 'name' },
     { label: 'Mata pelajaran', key: 'subjects' }, { label: 'Wali kelas', key: 'classCode' }
   ],
+  parents: [
+    { label: 'Nama orang tua', key: 'name' }, { label: 'Username', key: 'username' },
+    { label: 'Kelas anak', key: 'classCode' }, { label: 'NIS terkait', key: 'nis' }
+  ],
   classes: [
     { label: 'Kode', key: 'code' }, { label: 'Nama kelas', key: 'name' },
     { label: 'Wali kelas', key: 'homeroom' }, { label: 'Jumlah siswa', key: 'capacity' }
@@ -488,7 +492,7 @@ function renderIntegration() {
 }
 
 function masterResources() {
-  if (state.user.role === 'superadmin') return [['accounts', 'Semua akun'], ['students', 'Siswa'], ['teachers', 'Guru'], ['classes', 'Kelas'], ['subjects', 'Mata pelajaran']];
+  if (state.user.role === 'superadmin') return [['accounts', 'Semua akun'], ['students', 'Siswa'], ['teachers', 'Guru'], ['parents', 'Orang Tua'], ['classes', 'Kelas'], ['subjects', 'Mata pelajaran']];
   if (state.user.role === 'kepsek') return [['students', 'Siswa'], ['teachers', 'Guru'], ['classes', 'Kelas'], ['subjects', 'Mata pelajaran']];
   return [['students', 'Siswa binaan']];
 }
@@ -510,22 +514,23 @@ async function loadMaster(resource, search = '') {
   state.masterItems = result.items || [];
   $('#master-count').textContent = `${formatNumber(result.total)} data`;
   document.querySelectorAll('.tab-button').forEach(button => button.classList.toggle('active', button.dataset.resource === resource));
-  if (resource === 'accounts' && state.user.role === 'superadmin') renderAccountDirectory();
+  if (['accounts', 'students', 'teachers', 'parents'].includes(resource) && state.user.role === 'superadmin') renderImpersonationDirectory(resource);
   else createTable($('#master-table'), MASTER_COLUMNS[resource] || [], state.masterItems, 'Data tidak ditemukan.');
 }
 
-function renderAccountDirectory() {
+function renderImpersonationDirectory(resource) {
   const container = $('#master-table'); container.replaceChildren();
   if (!state.masterItems.length) return container.append(emptyMessage('Data akun tidak ditemukan.'));
   const table = document.createElement('table'); table.className = 'data-table';
   const head = document.createElement('thead'); const headRow = document.createElement('tr');
-  ['Nama', 'Username', 'Peran', 'Kelas', 'NIS', 'Aksi'].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.append(th); });
+  const columns = MASTER_COLUMNS[resource] || MASTER_COLUMNS.accounts;
+  [...columns.map(column => column.label), 'Aksi'].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.append(th); });
   head.append(headRow); const body = document.createElement('tbody');
   state.masterItems.forEach(item => {
     const tr = document.createElement('tr');
-    [item.name, item.username, item.role, item.classCode || '—', item.nis || '—'].forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
+    columns.forEach(column => { const td = document.createElement('td'); const value = typeof column.value === 'function' ? column.value(item) : item[column.key]; td.textContent = value == null || value === '' ? '—' : String(value); tr.append(td); });
     const action = document.createElement('td');
-    if (item.role !== 'superadmin' && item.active) { const button = document.createElement('button'); button.type = 'button'; button.className = 'small-button'; button.textContent = 'Lihat sebagai'; button.addEventListener('click', () => startImpersonation(item)); action.append(button); }
+    if (item.role !== 'superadmin' && item.active !== false) { const button = document.createElement('button'); button.type = 'button'; button.className = 'small-button'; button.textContent = 'Lihat sebagai'; button.addEventListener('click', () => startImpersonation(item)); action.append(button); }
     const log = document.createElement('button'); log.type = 'button'; log.className = 'small-button'; log.textContent = 'Log'; log.addEventListener('click', () => { state.activityFilter = item.username; showView('integration'); }); action.append(log);
     tr.append(action); body.append(tr);
   });

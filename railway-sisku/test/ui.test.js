@@ -64,3 +64,9 @@ test('UI menyediakan flow token, impersonasi, komplain, bulk, dan penilaian', ()
     assert.match(js, new RegExp(flow));
   }
 });
+
+test('impersonasi tersedia dari tab guru, siswa, dan orang tua', () => {
+  assert.match(js, /\['accounts', 'Semua akun'\].*\['students', 'Siswa'\].*\['teachers', 'Guru'\].*\['parents', 'Orang Tua'\]/);
+  assert.match(js, /\['accounts', 'students', 'teachers', 'parents'\]\.includes\(resource\)/);
+  assert.match(js, /Lihat sebagai/);
+});

@@ -1,6 +1,6 @@
 {
   "name": "sisku",
-  "version": "2.35.0",
+  "version": "2.36.0",
   "description": "SISKU (Sistem Informasi Sekolah Terpadu)",
   "scripts": {
     "test": "node scripts/validate.mjs",
