@@ -8,6 +8,10 @@ const { rateLimit } = require('express-rate-limit');
 const { getConfig } = require('./config');
 const { getPool, closePool } = require('./db');
 const { verifyPin, hashPin, createSessionToken, parseCookies, sha256 } = require('./security');
+const {
+  normalized, normalizeKey, latestImport, loadSheet, value, schoolDate,
+  todayJakarta, visibleAnnouncement
+} = require('./snapshot');
 
 const config = getConfig();
 const app = express();
@@ -103,6 +107,28 @@ async function requireAuth(req, res, next) {
   }
 }
 
+function requireRoles(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ status: 'error', message: 'Akun Anda tidak memiliki akses ke data ini.' });
+    }
+    next();
+  };
+}
+
+function number(valueToParse) {
+  const parsed = Number(String(valueToParse == null ? '' : valueToParse).replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function byNewest(rows, fieldNames) {
+  return rows.slice().sort((left, right) => {
+    const leftValue = fieldNames.map(name => value(left, name)).find(Boolean) || '';
+    const rightValue = fieldNames.map(name => value(right, name)).find(Boolean) || '';
+    return String(rightValue).localeCompare(String(leftValue));
+  });
+}
+
 app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/ready', async (req, res) => {
   try {
@@ -191,6 +217,234 @@ app.post('/api/v1/auth/logout', sameOrigin, requireAuth, async (req, res, next) 
   }
 });
 
+app.post('/api/v1/auth/change-pin', sameOrigin, requireAuth, async (req, res, next) => {
+  try {
+    const currentPin = String(req.body && req.body.currentPin || '').trim();
+    const newPin = String(req.body && req.body.newPin || '').trim();
+    if (!/^\d{6}$/.test(newPin)) {
+      return res.status(400).json({ status: 'error', message: 'PIN baru harus terdiri tepat dari 6 digit angka.' });
+    }
+    if (currentPin === newPin) {
+      return res.status(400).json({ status: 'error', message: 'PIN baru harus berbeda dari PIN saat ini.' });
+    }
+    const result = await db().query('SELECT pin_hash FROM app_users WHERE id = $1 AND active = true', [req.user.id]);
+    const verification = result.rowCount ? await verifyPin(currentPin, result.rows[0].pin_hash) : { valid: false };
+    if (!verification.valid) {
+      return res.status(400).json({ status: 'error', message: 'PIN saat ini tidak sesuai.' });
+    }
+    const nextHash = await hashPin(newPin);
+    const client = await db().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE app_users SET pin_hash = $1, pin_upgraded_at = now(), updated_at = now() WHERE id = $2',
+        [nextHash, req.user.id]
+      );
+      await client.query(
+        'UPDATE user_sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL',
+        [req.user.id, req.user.session_id]
+      );
+      await client.query(
+        `INSERT INTO audit_log(actor_user_id, action, entity_type, entity_id)
+         VALUES ($1, 'CHANGE_PIN', 'user', $2)`,
+        [req.user.id, req.user.id]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    res.json({ status: 'ok', message: 'PIN berhasil diperbarui.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/v1/overview', requireAuth, async (req, res, next) => {
+  try {
+    const activeImport = await latestImport(db());
+    if (!activeImport) return res.json({ status: 'ok', empty: true });
+    const [classes, teachers, subjects, attendance, yaumiah, grades, tasks, attempts, questions, announcements] = await Promise.all([
+      loadSheet(db(), 'Master_Kelas', activeImport.id),
+      loadSheet(db(), 'Master_Guru', activeImport.id),
+      loadSheet(db(), 'Master_Mapel', activeImport.id),
+      loadSheet(db(), 'Presensi', activeImport.id),
+      loadSheet(db(), 'Yaumiah_Log', activeImport.id),
+      loadSheet(db(), 'Nilai_UAS', activeImport.id),
+      loadSheet(db(), 'Tugas_Kelas', activeImport.id),
+      loadSheet(db(), 'Exam_Attempts', activeImport.id),
+      loadSheet(db(), 'Bank_Soal_UAS', activeImport.id),
+      loadSheet(db(), 'Announcements', activeImport.id)
+    ]);
+    const role = req.user.role;
+    const isAdmin = role === 'superadmin';
+    const isTeacher = role === 'guru';
+    const isFamily = role === 'siswa' || role === 'ortu';
+    const nis = normalized(req.user.student_nis || (role === 'siswa' ? req.user.username : ''));
+    const classCode = normalized(req.user.class_code);
+    const today = todayJakarta();
+    const teacherRow = isTeacher
+      ? teachers.find(row => normalizeKey(value(row, 'Username')) === normalizeKey(req.user.username))
+      : null;
+    const assignedSubjectTokens = normalized(value(teacherRow, 'Mata_Pelajaran'))
+      .split(/[;,|\n]+/).map(normalizeKey).filter(Boolean);
+    const allowedSubjects = new Set(assignedSubjectTokens);
+    subjects.forEach(subject => {
+      const code = normalizeKey(value(subject, 'Kode_Mapel'));
+      const name = normalizeKey(value(subject, 'Nama_Mapel'));
+      if (allowedSubjects.has(code) || allowedSubjects.has(name)) {
+        if (code) allowedSubjects.add(code);
+        if (name) allowedSubjects.add(name);
+      }
+    });
+
+    const studentResult = await db().query(
+      `SELECT username, full_name, class_code, student_nis
+         FROM app_users WHERE active = true AND role = 'siswa'
+        ORDER BY class_code, full_name`
+    );
+    let visibleStudents = studentResult.rows;
+    if (isFamily) visibleStudents = visibleStudents.filter(student => student.student_nis === nis);
+    if (isTeacher) {
+      visibleStudents = classCode && classCode !== '-'
+        ? visibleStudents.filter(student => student.class_code === classCode)
+        : [];
+    }
+
+    const allowedNis = new Set(visibleStudents.map(student => normalized(student.student_nis)));
+    const visibleAttendance = attendance.filter(row => isAdmin || allowedNis.has(normalized(value(row, 'NIS'))));
+    const visibleYaumiah = yaumiah.filter(row => isAdmin || allowedNis.has(normalized(value(row, 'NIS'))));
+    const visibleGrades = grades.filter(row => {
+      if (isAdmin) return true;
+      if (isFamily) return allowedNis.has(normalized(value(row, 'NIS')));
+      return allowedNis.has(normalized(value(row, 'NIS'))) || allowedSubjects.has(normalizeKey(value(row, 'Mapel')));
+    });
+    const visibleTasks = tasks.filter(row => {
+      if (isAdmin) return true;
+      const targetClass = normalized(value(row, 'Kelas'));
+      const subjectAllowed = isTeacher && allowedSubjects.has(normalizeKey(value(row, 'Mapel')));
+      return !targetClass || targetClass === 'SEMUA' || targetClass === classCode || subjectAllowed;
+    });
+    const visibleAttempts = attempts.filter(row => {
+      if (isAdmin) return true;
+      if (isFamily) return normalized(value(row, 'NIS')) === nis;
+      return (classCode && classCode !== '-' && normalized(value(row, 'Kelas')) === classCode)
+        || allowedSubjects.has(normalizeKey(value(row, 'Mapel')));
+    });
+    const visibleAnnouncements = announcements.filter(row => visibleAnnouncement(row, req.user));
+
+    const recentAttendance = byNewest(visibleAttendance, ['Timestamp', 'Tanggal']).slice(0, 8).map(row => ({
+      date: schoolDate(value(row, 'Tanggal', 'Timestamp')),
+      nis: normalized(value(row, 'NIS')),
+      name: normalized(value(row, 'Nama')),
+      status: normalized(value(row, 'Status')) || 'Hadir',
+      time: normalized(value(row, 'Jam_Masuk')) || '-'
+    }));
+    const recentGrades = byNewest(visibleGrades, ['Timestamp', 'Tanggal']).slice(0, 8).map(row => ({
+      date: schoolDate(value(row, 'Tanggal', 'Timestamp')),
+      nis: normalized(value(row, 'NIS')),
+      name: normalized(value(row, 'Nama')),
+      subject: normalized(value(row, 'Mapel')),
+      score: number(value(row, 'Skor_Akhir')),
+      status: normalized(value(row, 'Status_Penilaian')) || 'FINAL'
+    }));
+    const recentYaumiah = byNewest(visibleYaumiah, ['Timestamp', 'Tanggal']).slice(0, 8).map(row => ({
+      date: schoolDate(value(row, 'Tanggal', 'Timestamp')),
+      nis: normalized(value(row, 'NIS')),
+      name: normalized(value(row, 'Nama')),
+      achievement: number(value(row, 'Capaian_Persen')),
+      reading: normalized(value(row, 'Tilawah_Murajaah', 'Tilawah'))
+    }));
+    const taskList = byNewest(visibleTasks, ['Timestamp', 'Deadline']).slice(0, 8).map(row => ({
+      id: normalized(value(row, 'ID_Tugas')),
+      title: normalized(value(row, 'Judul')),
+      subject: normalized(value(row, 'Mapel')),
+      classCode: normalized(value(row, 'Kelas')),
+      deadline: normalized(value(row, 'Deadline')),
+      status: normalized(value(row, 'Status')) || 'Aktif'
+    }));
+    const announcementList = byNewest(visibleAnnouncements, ['Timestamp']).slice(0, 5).map(row => ({
+      id: normalized(value(row, 'ID_Pengumuman')),
+      title: normalized(value(row, 'Judul')),
+      message: normalized(value(row, 'Pesan')).slice(0, 500),
+      actor: normalized(value(row, 'Actor_Nama')),
+      timestamp: normalized(value(row, 'Timestamp'))
+    }));
+
+    const attendanceToday = visibleAttendance.filter(row => schoolDate(value(row, 'Tanggal', 'Timestamp')) === today);
+    const yaumiahToday = visibleYaumiah.filter(row => schoolDate(value(row, 'Tanggal', 'Timestamp')) === today);
+    const submittedAttempts = visibleAttempts.filter(row => normalizeKey(value(row, 'Status')) === 'submitted');
+    const approvedQuestions = questions.filter(row => {
+      if (!/approved/i.test(normalized(value(row, 'Status_Approval', 'Status_Approval_Kepsek')))) return false;
+      if (isAdmin) return true;
+      return allowedSubjects.has(normalizeKey(value(row, 'Mapel')))
+        || normalizeKey(value(row, 'Pembuat_Username')) === normalizeKey(req.user.username);
+    });
+
+    res.json({
+      status: 'ok',
+      role,
+      scope: { classCode, nis, today },
+      metrics: {
+        students: visibleStudents.length,
+        classes: isAdmin ? classes.length : (classCode && classCode !== '-' ? 1 : 0),
+        teachers: isAdmin ? teachers.length : (isTeacher ? 1 : 0),
+        subjects: isAdmin ? subjects.length : subjects.length,
+        attendanceToday: attendanceToday.length,
+        yaumiahToday: yaumiahToday.length,
+        grades: visibleGrades.length,
+        examAttempts: submittedAttempts.length,
+        approvedQuestions: isAdmin || isTeacher ? approvedQuestions.length : undefined
+      },
+      recentAttendance,
+      recentGrades,
+      recentYaumiah,
+      tasks: taskList,
+      announcements: announcementList,
+      accessMode: 'read-only-snapshot',
+      sourceImportedAt: activeImport.imported_at
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'guru'), async (req, res, next) => {
+  try {
+    const resource = String(req.params.resource || '').toLowerCase();
+    const search = String(req.query.search || '').trim().toLowerCase().slice(0, 80);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+    let items = [];
+    if (resource === 'students') {
+      const result = await db().query(
+        `SELECT username, full_name, class_code, student_nis
+           FROM app_users WHERE active = true AND role = 'siswa'
+          ORDER BY class_code, full_name`
+      );
+      items = result.rows.map(row => ({ username: row.username, name: row.full_name, classCode: row.class_code, nis: row.student_nis }));
+      if (req.user.role === 'guru' && req.user.class_code && req.user.class_code !== '-') {
+        items = items.filter(item => item.classCode === req.user.class_code);
+      }
+    } else {
+      if (req.user.role !== 'superadmin') return res.status(403).json({ status: 'error', message: 'Data ini hanya tersedia untuk superadmin.' });
+      const mapping = {
+        classes: ['Master_Kelas', row => ({ code: normalized(value(row, 'Kode_Kelas')), name: normalized(value(row, 'Nama_Kelas')), homeroom: normalized(value(row, 'Wali_Kelas')), capacity: number(value(row, 'Jumlah_Siswa')) })],
+        teachers: ['Master_Guru', row => ({ nip: normalized(value(row, 'NIP')), username: normalized(value(row, 'Username')), name: normalized(value(row, 'Nama_Guru')), subjects: normalized(value(row, 'Mata_Pelajaran')), classCode: normalized(value(row, 'Wali_Kelas')) })],
+        subjects: ['Master_Mapel', row => ({ code: normalized(value(row, 'Kode_Mapel')), name: normalized(value(row, 'Nama_Mapel')), group: normalized(value(row, 'Kelompok')) })]
+      };
+      if (!mapping[resource]) return res.status(404).json({ status: 'error', message: 'Data master tidak ditemukan.' });
+      const [sheetName, mapper] = mapping[resource];
+      items = (await loadSheet(db(), sheetName)).map(mapper);
+    }
+    if (search) items = items.filter(item => Object.values(item).some(itemValue => String(itemValue).toLowerCase().includes(search)));
+    res.json({ status: 'ok', resource, total: items.length, items: items.slice(0, limit), readOnly: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
   try {
     const latest = await db().query(
@@ -227,8 +481,8 @@ app.get('/api/v1/dashboard', requireAuth, async (req, res, next) => {
       sheets,
       roles,
       modules: [
-        { id: 'master', label: 'Data master', status: 'next', detail: 'Tahap berikutnya' },
-        { id: 'presensi', label: 'Presensi & yaumiah', status: 'gas', detail: 'Tetap berjalan di GAS' },
+        { id: 'master', label: 'Data master', status: 'ready', detail: 'Tersedia read-only sesuai peran' },
+        { id: 'presensi', label: 'Presensi & yaumiah', status: 'ready', detail: 'Riwayat tersedia, input tetap di GAS' },
         { id: 'tugas', label: 'Tugas & komunikasi', status: 'gas', detail: 'Tetap berjalan di GAS' },
         { id: 'ujian', label: 'Ujian & nilai', status: 'gas', detail: 'Dipindahkan paling akhir' }
       ]

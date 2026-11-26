@@ -64,12 +64,14 @@
         <span><b>SISKU</b><small>Railway foundation</small></span>
       </div>
       <nav aria-label="Menu utama">
-        <button class="nav-item active" type="button"><span aria-hidden="true">⌂</span> Ringkasan</button>
+        <button class="nav-item active" type="button" data-view="summary"><span aria-hidden="true">⌂</span> Ringkasan</button>
         <div class="nav-divider">Modul sekolah</div>
-        <button class="nav-item" type="button" disabled><span aria-hidden="true">◇</span> Data master <small>Segera</small></button>
+        <button id="master-nav" class="nav-item" type="button" data-view="master"><span aria-hidden="true">◇</span> Data master <small>Read</small></button>
         <button class="nav-item" type="button" disabled><span aria-hidden="true">✓</span> Presensi <small>GAS</small></button>
         <button class="nav-item" type="button" disabled><span aria-hidden="true">✦</span> Yaumiah <small>GAS</small></button>
         <button class="nav-item" type="button" disabled><span aria-hidden="true">▤</span> Ujian & nilai <small>GAS</small></button>
+        <div class="nav-divider">Akun</div>
+        <button class="nav-item" type="button" data-view="security"><span aria-hidden="true">⌁</span> Keamanan</button>
       </nav>
       <div class="sidebar-note"><b>Migrasi aman</b><p>Fitur lama tetap tersedia di aplikasi GAS selama masa transisi.</p></div>
     </aside>
@@ -88,13 +90,14 @@
       </header>
 
       <div class="content-wrap">
+        <section id="summary-panel" class="view-panel">
         <section class="hero-card">
           <div>
-            <span class="status-pill"><i></i> Tahap fondasi aktif</span>
-            <h2>Data sekolah sedang disiapkan untuk rumah barunya.</h2>
-            <p>Belum ada data sumber yang dihapus atau dialihkan. Setiap tahap akan diperiksa sebelum fitur dibuka.</p>
+            <span class="status-pill"><i></i> Snapshot produksi tersedia</span>
+            <h2 id="hero-title">Data sekolah sudah hadir di ruang Railway.</h2>
+            <p id="hero-copy">Ringkasan ditampilkan sesuai peran. Operasi yang berisiko tetap berjalan di GAS selama masa rekonsiliasi.</p>
           </div>
-          <div class="migration-ring" aria-label="Tahap 1 dari 5"><b>1<small>/5</small></b><span>tahap</span></div>
+          <div class="migration-ring" aria-label="Tahap 2 dari 5"><b>2<small>/5</small></b><span>tahap</span></div>
         </section>
 
         <section class="metric-grid" aria-label="Ringkasan data">
@@ -115,6 +118,60 @@
             <div id="sheet-list" class="sheet-list"><p class="empty-state">Belum ada snapshot yang diimpor.</p></div>
           </section>
         </div>
+        <section class="surface operational-surface" aria-labelledby="operational-title">
+          <div class="section-heading">
+            <div><p class="eyebrow dark">Data sesuai peran</p><h2 id="operational-title">Aktivitas sekolah</h2></div>
+            <span id="data-mode-badge" class="quiet-badge">Read-only aman</span>
+          </div>
+          <div id="operational-metrics" class="compact-metric-grid"></div>
+          <div id="announcement-list" class="announcement-list"></div>
+          <div class="records-grid">
+            <article class="record-card"><h3>Presensi terbaru</h3><div id="attendance-table" class="table-wrap"></div></article>
+            <article class="record-card"><h3>Nilai terbaru</h3><div id="grade-table" class="table-wrap"></div></article>
+            <article class="record-card"><h3>Yaumiah terbaru</h3><div id="yaumiah-table" class="table-wrap"></div></article>
+            <article class="record-card"><h3>Tugas kelas</h3><div id="task-table" class="table-wrap"></div></article>
+          </div>
+        </section>
+        </section>
+
+        <section id="master-panel" class="view-panel" hidden>
+          <section class="surface">
+            <div class="section-heading">
+              <div><p class="eyebrow dark">Data master</p><h2>Direktori sekolah</h2></div>
+              <span class="quiet-badge">Tanpa PIN</span>
+            </div>
+            <div id="master-tabs" class="tab-row">
+              <button type="button" class="tab-button active" data-resource="students">Siswa</button>
+              <button type="button" class="tab-button admin-only" data-resource="teachers">Guru</button>
+              <button type="button" class="tab-button admin-only" data-resource="classes">Kelas</button>
+              <button type="button" class="tab-button admin-only" data-resource="subjects">Mapel</button>
+            </div>
+            <div class="master-toolbar">
+              <input id="master-search" type="search" placeholder="Cari data…" aria-label="Cari data master">
+              <span id="master-count" class="quiet-badge">0 data</span>
+            </div>
+            <div id="master-table" class="table-wrap master-table"></div>
+            <p class="read-only-note">Data ini berasal dari snapshot terverifikasi. Perubahan master masih dilakukan di GAS sampai dual-write diuji.</p>
+          </section>
+        </section>
+
+        <section id="security-panel" class="view-panel" hidden>
+          <section class="surface security-card">
+            <p class="eyebrow dark">Keamanan akun</p>
+            <h2>Ganti PIN Railway</h2>
+            <p>Gunakan enam digit unik. Perubahan ini berlaku untuk login Railway dan tidak mengubah akun GAS selama masa transisi.</p>
+            <form id="change-pin-form">
+              <label for="current-pin">PIN saat ini</label>
+              <input id="current-pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" required>
+              <label for="new-pin">PIN baru, 6 digit</label>
+              <input id="new-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required>
+              <label for="confirm-pin">Ulangi PIN baru</label>
+              <input id="confirm-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" required>
+              <div id="pin-message" class="form-message" role="alert"></div>
+              <button class="primary-button" type="submit"><span>Perbarui PIN</span><span aria-hidden="true">→</span></button>
+            </form>
+          </section>
+        </section>
       </div>
     </section>
   </main>

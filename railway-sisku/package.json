@@ -13,7 +13,7 @@
     "import": "node scripts/import-snapshot.js",
     "sync:google": "node scripts/sync-google-sheet.js",
     "test": "node --test",
-    "check": "node --check src/start.js && node --check src/server.js && node --check src/importer.js && node --check scripts/sync-google-sheet.js && npm test"
+    "check": "node --check src/start.js && node --check src/server.js && node --check src/importer.js && node --check src/snapshot.js && node --check src/public/app.js && node --check scripts/sync-google-sheet.js && npm test"
   },
   "dependencies": {
     "express": "^5.1.0",
