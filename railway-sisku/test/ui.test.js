@@ -45,6 +45,16 @@ test('Railway menyediakan pembuatan soal dan CRUD master native PostgreSQL', () 
   assert.doesNotMatch(js, /GAS_SESSION_REQUIRED/);
 });
 
+test('form tambah soal dan seluruh aksi ubah utama memakai popup', () => {
+  assert.match(html, /id="question-new"[^>]*>\+ Tambah soal</);
+  assert.match(html, /id="question-form-surface"[^>]*hidden/);
+  assert.match(html, /id="editor-dialog"/);
+  assert.match(css, /\.editor-dialog::backdrop/);
+  for (const editor of ['editTask', 'startManagementEdit', 'editNativeQuestion', 'editYaumiahItem']) {
+    assert.match(js, new RegExp(`function ${editor}\\([^)]*\\) \\{[\\s\\S]{0,900}openEditorDialog\\(`));
+  }
+});
+
 test('aksi operasional berjalan native tanpa tautan kerja ke GAS', () => {
   assert.doesNotMatch(js, /const GAS_URL/);
   assert.doesNotMatch(html, /operational-link/);

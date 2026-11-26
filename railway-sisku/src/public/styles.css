@@ -199,7 +199,7 @@ label { display: block; margin: 0 0 8px; color: var(--slate-700); font-size: .87
 .form-actions { display: flex; align-items: center; gap: 9px; }
 .secondary-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border: 1px solid var(--slate-200); border-radius: 12px; color: var(--slate-700); background: white; font-size: .82rem; font-weight: 800; }
 .secondary-button:hover { background: var(--slate-50); }
-.management-layout { display: grid; grid-template-columns: minmax(320px, .75fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
+.management-layout { display: block; }
 .management-editor { position: sticky; top: 132px; }
 .row-actions { display: flex; gap: 6px; white-space: nowrap; }
 .danger-button { border-color: #fecdd3; color: #be123c; background: #fff1f2; }
@@ -229,6 +229,17 @@ label { display: block; margin: 0 0 8px; color: var(--slate-700); font-size: .87
 .app-footer { width: min(1180px, calc(100% - 32px)); margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; padding: 22px 0 28px; border-top: 1px solid #dfe7e3; color: var(--slate-500); font-size: .7rem; }
 .toast { position: fixed; z-index: 100; right: 22px; bottom: 22px; max-width: min(380px, calc(100% - 32px)); padding: 14px 17px; border-radius: 12px; color: white; background: var(--emerald-900); box-shadow: 0 15px 40px rgba(15,23,42,.22); font-size: .8rem; opacity: 0; transform: translateY(14px); pointer-events: none; transition: .2s ease; }
 .toast.show { opacity: 1; transform: translateY(0); }
+.editor-dialog { width: min(880px, calc(100% - 32px)); max-height: min(88vh, 900px); margin: auto; padding: 0; overflow: hidden; border: 0; border-radius: 20px; color: var(--slate-700); background: white; box-shadow: 0 28px 90px rgba(15,23,42,.28); }
+.editor-dialog::backdrop { background: rgba(15,23,42,.58); backdrop-filter: blur(4px); }
+.editor-dialog-shell { display: grid; grid-template-rows: auto minmax(0,1fr); max-height: min(88vh, 900px); }
+.editor-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 22px 17px; border-bottom: 1px solid var(--line); background: linear-gradient(135deg, #f0fdf4, white); }
+.editor-dialog-header span { color: var(--emerald-700); font-size: .72rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.editor-dialog-header h2 { margin: 5px 0 0; font-size: 1.25rem; letter-spacing: -.03em; }
+.dialog-close-button { width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--slate-200); border-radius: 12px; color: var(--slate-600); background: white; font-size: 1.45rem; line-height: 1; }
+.dialog-close-button:hover { color: var(--emerald-800); background: var(--emerald-50); }
+.editor-dialog-body { overflow: auto; padding: 22px; }
+.editor-dialog-body > .data-form { width: 100%; }
+body:has(.editor-dialog[open]) { overflow: hidden; }
 
 @media (max-width: 960px) {
   .login-screen { grid-template-columns: 1fr; }
@@ -280,6 +291,10 @@ label { display: block; margin: 0 0 8px; color: var(--slate-700); font-size: .87
   .bottom-navigation .nav-button.active { color: var(--emerald-700); background: var(--emerald-50); }
   .app-footer { display: none; }
   .toast { right: 16px; bottom: 92px; }
+  .editor-dialog { width: calc(100% - 20px); max-height: 92vh; border-radius: 16px; }
+  .editor-dialog-shell { max-height: 92vh; }
+  .editor-dialog-header { padding: 17px 16px 14px; }
+  .editor-dialog-body { padding: 16px; }
 }
 
 @media (max-width: 420px) {

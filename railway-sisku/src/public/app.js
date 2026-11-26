@@ -111,6 +111,42 @@ const state = {
   managementEditing: null, managementLoaded: false, nativeQuestions: [], selectedQuestions: new Set(), exams: [], activeExam: null, attempts: [], taskEditing: null, questionEditing: null, questionImageData: '', yaumiahConfig: null, yaumiahEditing: null, attendanceConfig: null, attendanceCoords: null, activityFilter: '', organization: {}
 };
 
+let editorDialogState = null;
+
+function openEditorDialog(element, { eyebrow = 'Formulir', title = 'Ubah data', onClose = null } = {}) {
+  if (!element) return;
+  if (editorDialogState) closeEditorDialog();
+  const dialog = $('#editor-dialog');
+  const marker = document.createComment(`restore-${element.id || 'editor'}`);
+  element.parentNode.insertBefore(marker, element);
+  const wasHidden = element.hidden;
+  element.hidden = false;
+  $('#editor-dialog-eyebrow').textContent = eyebrow;
+  $('#editor-dialog-title').textContent = title;
+  $('#editor-dialog-body').replaceChildren(element);
+  editorDialogState = { element, marker, wasHidden, onClose };
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+  window.setTimeout(() => element.querySelector('input:not([type="hidden"]), select, textarea, button')?.focus(), 0);
+}
+
+function closeEditorDialog() {
+  if (!editorDialogState) return;
+  const dialog = $('#editor-dialog');
+  const current = editorDialogState;
+  editorDialogState = null;
+  if (dialog.open && typeof dialog.close === 'function') dialog.close();
+  else dialog.removeAttribute('open');
+  current.marker.replaceWith(current.element);
+  current.element.hidden = current.wasHidden;
+  $('#editor-dialog-body').replaceChildren();
+  if (typeof current.onClose === 'function') current.onClose();
+}
+
+function dialogIsEditing(element) {
+  return Boolean(editorDialogState && editorDialogState.element === element);
+}
+
 function formatNumber(value) {
   return new Intl.NumberFormat('id-ID').format(Number(value || 0));
 }
@@ -274,6 +310,7 @@ function allowedView(name) {
 }
 
 function showView(name) {
+  if (editorDialogState) closeEditorDialog();
   const target = allowedView(name) ? name : 'summary';
   state.activeView = target;
   document.querySelectorAll('.view-panel').forEach(panel => { panel.hidden = panel.id !== `${target}-panel`; });
@@ -323,7 +360,8 @@ function configureRole() {
   buildNavigation();
   buildMasterTabs();
   renderServiceCards();
-  $('#question-form-surface').hidden = !['guru', 'superadmin'].includes(role);
+  $('#question-form-surface').hidden = true;
+  $('#question-new').hidden = !['guru', 'superadmin'].includes(role);
   $('#bulk-question-surface').hidden = !['guru', 'superadmin'].includes(role);
   $('#bulk-approve-questions').hidden = !['kepsek', 'superadmin'].includes(role);
   $('#attendance-entry-surface').hidden = !['siswa', 'guru', 'superadmin'].includes(role);
@@ -462,7 +500,17 @@ async function completeTask(task) {
 function editTask(task) {
   state.taskEditing = task; $('#task-subject').value = task.subject; $('#task-class').value = task.classCode; $('#task-title').value = task.title; $('#task-description').value = task.description || '';
   if (task.deadline) { const date = new Date(task.deadline); $('#task-deadline').value = Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
-  $('#task-entry-surface').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#task-form button[type="submit"]').textContent = 'Simpan perubahan';
+  openEditorDialog($('#task-form'), {
+    eyebrow: 'Kelola tugas',
+    title: `Ubah tugas · ${task.title}`,
+    onClose: () => {
+      state.taskEditing = null;
+      $('#task-form').reset();
+      $('#task-form-message').textContent = '';
+      $('#task-form button[type="submit"]').textContent = 'Terbitkan tugas';
+    }
+  });
 }
 
 async function deleteTask(task) {
@@ -709,12 +757,22 @@ function renderManagementTable(query = '') {
 function startManagementEdit(row) {
   state.managementEditing = { ...row };
   buildManagementForm();
-  $('.management-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  openManagementEditor();
 }
 
 function resetManagementForm() {
   state.managementEditing = null;
   buildManagementForm();
+}
+
+function openManagementEditor() {
+  const config = MANAGEMENT_CONFIG[state.managementResource];
+  const editing = Boolean(state.managementEditing);
+  openEditorDialog($('#management-form'), {
+    eyebrow: editing ? 'Ubah data' : 'Data baru',
+    title: `${editing ? 'Ubah' : 'Tambah'} ${config.label}`,
+    onClose: resetManagementForm
+  });
 }
 
 async function deleteManagementRow(row) {
@@ -737,6 +795,7 @@ function scheduleManagementRefresh() {
 }
 
 async function loadManagement(resource = state.managementResource, force = false) {
+  if (dialogIsEditing($('#management-form'))) closeEditorDialog();
   state.managementResource = resource;
   state.managementEditing = null;
   await loadFormOptions(force);
@@ -832,8 +891,13 @@ function editNativeQuestion(item) {
   $('#question-id').value = item.id; $('#question-id').readOnly = true; $('#question-type').value = item.type || 'PG'; $('#question-level').value = item.level || 'C3';
   $('#question-subject').value = item.subject; $('#question-class').value = item.classCode || 'SEMUA'; $('#question-kd').value = item.competency || ''; $('#question-text').value = item.question || '';
   for (const key of ['a', 'b', 'c', 'd', 'e']) $(`#question-option-${key}`).value = item.options?.[key.toUpperCase()] || '';
-  $('#question-key').value = item.answerKey || ''; updateQuestionType(); $('#question-form-surface').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#question-key').value = item.answerKey || ''; updateQuestionType();
   $('#question-image-url').value = /^https?:/i.test(item.imageUrl || '') ? item.imageUrl : ''; state.questionImageData = /^data:image\//i.test(item.imageUrl || '') ? item.imageUrl : '';
+  openEditorDialog($('#question-form'), {
+    eyebrow: 'Bank soal UAS',
+    title: `Ubah soal · ${item.id}`,
+    onClose: resetQuestionForm
+  });
 }
 
 async function loadNativeQuestions() {
@@ -915,6 +979,16 @@ async function prepareYaumiah() {
 function editYaumiahItem(item) {
   state.yaumiahEditing = item; $('#yaumiah-master-id').value = item.id; $('#yaumiah-master-name').value = item.name; $('#yaumiah-master-category').value = item.category; $('#yaumiah-master-class').value = item.class_code; $('#yaumiah-master-points').value = item.points;
   $('#yaumiah-master-form button').textContent = 'Simpan perubahan';
+  openEditorDialog($('#yaumiah-master-form'), {
+    eyebrow: 'Aktivitas Yaumiah',
+    title: `Ubah aktivitas · ${item.name}`,
+    onClose: () => {
+      state.yaumiahEditing = null;
+      $('#yaumiah-master-form').reset();
+      $('#yaumiah-master-form button[type="submit"]').textContent = 'Tambah aktivitas';
+      $('#yaumiah-config-message').textContent = '';
+    }
+  });
 }
 
 async function deleteYaumiahItem(item) {
@@ -1147,6 +1221,10 @@ function showDashboard() {
   $('#login-view').hidden = true; $('#dashboard-view').hidden = false;
 }
 
+$('#editor-dialog-close').addEventListener('click', closeEditorDialog);
+$('#editor-dialog').addEventListener('cancel', event => { event.preventDefault(); closeEditorDialog(); });
+$('#editor-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) closeEditorDialog(); });
+
 document.querySelectorAll('[data-view-link]').forEach(element => {
   element.addEventListener('click', event => { event.preventDefault(); showView(element.dataset.viewLink); });
 });
@@ -1277,9 +1355,12 @@ $('#yaumiah-form').addEventListener('submit', async event => {
 $('#yaumiah-master-form').addEventListener('submit', async event => {
   event.preventDefault(); $('#yaumiah-config-message').textContent = '';
   try {
+    const editing = Boolean(state.yaumiahEditing);
     const data = { oldId: state.yaumiahEditing?.id, id: $('#yaumiah-master-id').value, nama: $('#yaumiah-master-name').value, kategori: $('#yaumiah-master-category').value, kelas: $('#yaumiah-master-class').value, poin: Number($('#yaumiah-master-points').value) };
     const result = await nativeAction(state.yaumiahEditing ? 'UPDATE_YAUMIAH' : 'MASTER_YAUMIAH', data);
-    state.yaumiahEditing = null; event.currentTarget.reset(); event.currentTarget.querySelector('button').textContent = 'Tambah aktivitas'; await prepareYaumiah(); toast(result.message);
+    if (editing && dialogIsEditing(event.currentTarget)) closeEditorDialog();
+    else { state.yaumiahEditing = null; event.currentTarget.reset(); event.currentTarget.querySelector('button').textContent = 'Tambah aktivitas'; }
+    await prepareYaumiah(); toast(result.message);
   } catch (error) { $('#yaumiah-config-message').textContent = error.message; }
 });
 
@@ -1294,9 +1375,12 @@ $('#tahfidz-target-form').addEventListener('submit', async event => {
 $('#task-form').addEventListener('submit', async event => {
   event.preventDefault(); const message = $('#task-form-message'); const button = event.currentTarget.querySelector('button'); message.textContent = ''; button.disabled = true;
   try {
+    const editing = Boolean(state.taskEditing);
     const payload = { id: state.taskEditing?.id, oldId: state.taskEditing?.id, mapel: $('#task-subject').value, kelas: $('#task-class').value, judul: $('#task-title').value, deskripsi: $('#task-description').value, deadline: $('#task-deadline').value || null };
     const result = await nativeAction(state.taskEditing ? 'UPDATE_TUGAS' : 'TUGAS', payload);
-    state.taskEditing = null; event.currentTarget.reset(); await loadDashboard(); showView('tasks'); toast(result.message);
+    if (editing && dialogIsEditing(event.currentTarget)) closeEditorDialog();
+    else { state.taskEditing = null; event.currentTarget.reset(); }
+    await loadDashboard(); showView('tasks'); toast(result.message);
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; }
 });
@@ -1354,14 +1438,15 @@ $('#management-form').addEventListener('submit', async event => {
       const oldIdentity = managementIdentity(editing);
       state.managementItems = state.managementItems.map(item => managementIdentity(item) === oldIdentity ? nextRow : item);
     } else state.managementItems.unshift(nextRow);
-    renderManagementTable($('#management-search').value); resetManagementForm();
+    renderManagementTable($('#management-search').value);
+    if (dialogIsEditing(event.currentTarget)) closeEditorDialog(); else resetManagementForm();
     toast(result.message || 'Data berhasil disimpan ke PostgreSQL.'); scheduleManagementRefresh();
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; button.textContent = 'Simpan'; }
 });
 
-$('#management-new').addEventListener('click', resetManagementForm);
-$('#management-cancel').addEventListener('click', resetManagementForm);
+$('#management-new').addEventListener('click', () => { resetManagementForm(); openManagementEditor(); });
+$('#management-cancel').addEventListener('click', closeEditorDialog);
 $('#management-search').addEventListener('input', event => renderManagementTable(event.target.value));
 
 function splitBulkRow(line, delimiter) {
@@ -1401,7 +1486,11 @@ $('#bulk-master-form').addEventListener('submit', async event => {
 });
 
 $('#question-type').addEventListener('change', updateQuestionType);
-$('#question-reset').addEventListener('click', resetQuestionForm);
+$('#question-new').addEventListener('click', () => {
+  resetQuestionForm();
+  openEditorDialog($('#question-form'), { eyebrow: 'Bank soal UAS', title: 'Tambah soal UAS', onClose: resetQuestionForm });
+});
+$('#question-reset').addEventListener('click', () => { if (dialogIsEditing($('#question-form'))) closeEditorDialog(); else resetQuestionForm(); });
 $('#native-question-search').addEventListener('input', event => renderNativeQuestions(event.target.value));
 $('#question-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -1421,15 +1510,17 @@ $('#question-form').addEventListener('submit', async event => {
   }
   button.disabled = true; button.textContent = 'Menyimpan…';
   try {
+    const editing = Boolean(state.questionEditing);
     const result = await nativeAction(state.questionEditing ? 'UPDATE_SOAL' : 'SOAL_UAS', data);
     state.overview.questionStats = state.overview.questionStats || [];
     const existing = state.overview.questionStats.find(item => item.subject === data.mapel);
-    if (!state.questionEditing) {
+    if (!editing) {
       if (existing) { existing.total += 1; existing.pending += 1; }
       else state.overview.questionStats.push({ subject: data.mapel, total: 1, approved: 0, pending: 1 });
     }
     registerTable('question-table', state.overview.questionStats, TABLE_COLUMNS.questions, 'Belum ada statistik soal.');
-    resetQuestionForm(); await loadNativeQuestions(); toast(result.message || 'Soal berhasil disimpan ke PostgreSQL.');
+    if (dialogIsEditing(event.currentTarget)) closeEditorDialog(); else resetQuestionForm();
+    await loadNativeQuestions(); toast(result.message || 'Soal berhasil disimpan ke PostgreSQL.');
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; button.textContent = 'Simpan soal'; }
 });
