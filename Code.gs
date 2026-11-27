@@ -1,8 +1,8 @@
 // ============================================================================
 // GOOGLE APPS SCRIPT (Code.gs) - SISKU REAL PRODUCTION (2-WAY SYNC)
-// VERSI: v2.35 (27 November 2026) - Sesi aktif diperpanjang otomatis
+// VERSI: v2.36 (27 November 2026) - Izin Google Drive untuk unggah gambar soal
 // ============================================================================
-const APP_VERSION = 'v2.35';
+const APP_VERSION = 'v2.36';
 const FOLDER_PENDUKUNG_ID = '12TiJ3oT3WjJaksD7UfjlU2U18YpkA0bS';
 const FOLDER_SOAL_UAS_ID  = '1_aUdLO6f2Ka5N8jlPAuED_O0K_01x__2';
 const DOC_ACUAN_ID        = '1SvMI5RH3OlsVjRiHZteaMvjWD2TJANdO';
@@ -18,6 +18,8 @@ const RAILWAY_SYNC_SHEETS = [
 // Fungsi maintenance sementara untuk memicu dialog otorisasi pemilik.
 // Tidak membaca atau mengembalikan data sekolah dan dihapus setelah dipakai.
 function authorizeProductionServices() {
+  // Minta seluruh izin sekaligus agar izin Google Drive tidak terlewat di layar persetujuan granular.
+  ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Spreadsheet induk SISKU tidak tersedia.');
   ss.getName();
@@ -190,8 +192,16 @@ function uploadImageAsset(imageData, prefix) {
   const ext = mime.split('/')[1].replace('jpeg', 'jpg');
   const name = String(imageData.name || (prefix + '-' + Date.now() + '.' + ext)).replace(/[^a-zA-Z0-9._-]/g, '_');
   const blob = Utilities.newBlob(Utilities.base64Decode(match[2]), mime, prefix + '-' + name);
-  const file = DriveApp.getFolderById(FOLDER_SOAL_UAS_ID).createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  let file;
+  try {
+    file = DriveApp.getFolderById(FOLDER_SOAL_UAS_ID).createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    if (/permission|Required permissions|auth\/drive/i.test(String(e && e.message || e))) {
+      throw new Error('Akses Google Drive belum diizinkan oleh pemilik aplikasi. Admin perlu menjalankan fungsi authorizeProductionServices di editor Apps Script dan menyetujui izin Google Drive.');
+    }
+    throw e;
+  }
   return 'https://drive.google.com/uc?export=view&id=' + file.getId();
 }
 
