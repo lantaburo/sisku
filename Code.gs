@@ -1,8 +1,8 @@
 // ============================================================================
 // GOOGLE APPS SCRIPT (Code.gs) - SISKU REAL PRODUCTION (2-WAY SYNC)
-// VERSI: v2.36 (27 November 2026) - Izin Google Drive untuk unggah gambar soal
+// VERSI: v2.37 (27 November 2026) - Diagnosis langkah unggah gambar soal
 // ============================================================================
-const APP_VERSION = 'v2.36';
+const APP_VERSION = 'v2.37';
 const FOLDER_PENDUKUNG_ID = '12TiJ3oT3WjJaksD7UfjlU2U18YpkA0bS';
 const FOLDER_SOAL_UAS_ID  = '1_aUdLO6f2Ka5N8jlPAuED_O0K_01x__2';
 const DOC_ACUAN_ID        = '1SvMI5RH3OlsVjRiHZteaMvjWD2TJANdO';
@@ -24,9 +24,17 @@ function authorizeProductionServices() {
   if (!ss) throw new Error('Spreadsheet induk SISKU tidak tersedia.');
   ss.getName();
   DriveApp.getFolderById(FOLDER_PENDUKUNG_ID).getName();
-  DriveApp.getFolderById(FOLDER_SOAL_UAS_ID).getName();
+  const soalFolder = DriveApp.getFolderById(FOLDER_SOAL_UAS_ID);
+  soalFolder.getName();
   PropertiesService.getScriptProperties().getKeys();
-  return 'OK: layanan Spreadsheet, Drive, dan Script Properties telah diotorisasi.';
+  // Uji tulis nyata: buat file kecil, bagikan via link, lalu buang ke sampah.
+  let probe;
+  try { probe = soalFolder.createFile('sisku-uji-izin.txt', 'uji izin unggah gambar soal'); }
+  catch (e) { throw new Error('GAGAL di langkah membuat file pada folder gambar soal: ' + (e && e.message || e)); }
+  try { probe.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
+  catch (e) { probe.setTrashed(true); throw new Error('GAGAL di langkah berbagi "Siapa saja yang memiliki link": ' + (e && e.message || e)); }
+  probe.setTrashed(true);
+  return 'OK: Spreadsheet, Drive (baca, tulis, dan berbagi link), dan Script Properties siap.';
 }
 
 function setupDatabase() {
@@ -192,17 +200,32 @@ function uploadImageAsset(imageData, prefix) {
   const ext = mime.split('/')[1].replace('jpeg', 'jpg');
   const name = String(imageData.name || (prefix + '-' + Date.now() + '.' + ext)).replace(/[^a-zA-Z0-9._-]/g, '_');
   const blob = Utilities.newBlob(Utilities.base64Decode(match[2]), mime, prefix + '-' + name);
+  let folder;
   let file;
-  try {
-    file = DriveApp.getFolderById(FOLDER_SOAL_UAS_ID).createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (e) {
-    if (/permission|Required permissions|auth\/drive/i.test(String(e && e.message || e))) {
-      throw new Error('Akses Google Drive belum diizinkan oleh pemilik aplikasi. Admin perlu menjalankan fungsi authorizeProductionServices di editor Apps Script dan menyetujui izin Google Drive.');
-    }
-    throw e;
+  try { folder = DriveApp.getFolderById(FOLDER_SOAL_UAS_ID); }
+  catch (e) { throw driveUploadError_('folder', e); }
+  try { file = folder.createFile(blob); }
+  catch (e) { throw driveUploadError_('create', e); }
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
+  catch (e) {
+    try { file.setTrashed(true); } catch (ignored) {}
+    throw driveUploadError_('share', e);
   }
   return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+}
+
+// Menerjemahkan error Drive menjadi petunjuk yang menyebut langkah mana yang gagal.
+function driveUploadError_(step, e) {
+  const raw = String(e && e.message || e);
+  if (/permission to call|Required permissions|auth\/drive/i.test(raw)) {
+    return new Error('Akses Google Drive belum diizinkan oleh pemilik aplikasi. Admin perlu menjalankan fungsi authorizeProductionServices di editor Apps Script dan menyetujui izin Google Drive.');
+  }
+  const hints = {
+    folder: 'Gagal membuka folder gambar soal. Pastikan akun pemilik aplikasi masih memiliki akses ke folder tersebut.',
+    create: 'Gagal menyimpan gambar ke folder soal. Akun pemilik aplikasi perlu akses Editor ke folder gambar soal.',
+    share: 'Gambar tidak dapat dibagikan agar bisa dilihat siswa. Kebijakan Google Workspace kemungkinan melarang berbagi "Siapa saja yang memiliki link"; admin Workspace perlu mengizinkannya.'
+  };
+  return new Error(hints[step] + ' (Detail: ' + raw + ')');
 }
 
 function hapusAkunDemoYangDikenal_() {

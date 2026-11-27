@@ -1,11 +1,11 @@
 {
   "name": "sisku",
-  "version": "2.36.1",
+  "version": "2.36.2",
   "description": "SISKU (Sistem Informasi Sekolah Terpadu)",
   "scripts": {
     "test": "node scripts/validate.mjs",
     "push": "npm test && clasp push",
-    "deploy": "npm test && clasp push && clasp deploy -i AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A -d 'SISKU v2.36 izin Google Drive untuk gambar soal'",
+    "deploy": "npm test && clasp push && clasp deploy -i AKfycbxbagBLe6Ji9ci1kQKpD4bS61uqLgkoVgjdxHzJuy90stN6Y-zP5v5mX5746-AJDKHa2A -d 'SISKU v2.37 diagnosis unggah gambar soal'",
     "deployments": "clasp deployments"
   }
 }
