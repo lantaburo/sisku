@@ -108,7 +108,9 @@ const state = {
   user: null, dashboard: null, overview: null, activeView: 'summary',
   masterResource: 'students', masterItems: [], tableRows: {}, loadingCount: 0,
   formOptions: null, managementResource: 'subjects', managementItems: [],
-  managementEditing: null, managementLoaded: false, nativeQuestions: [], selectedQuestions: new Set(), exams: [], activeExam: null, attempts: [], taskEditing: null, questionEditing: null, questionImageData: '', yaumiahConfig: null, yaumiahEditing: null, attendanceConfig: null, attendanceCoords: null, activityFilter: '', organization: {}
+  managementEditing: null, managementLoaded: false, nativeQuestions: [], selectedQuestions: new Set(),
+  questionQuery: { page: 1, pageSize: 25, total: 0, totalPages: 1, search: '', subject: 'SEMUA', classCode: 'SEMUA', sort: 'updated_desc', subjects: [], classes: [] },
+  questionRequestId: 0, exams: [], activeExam: null, attempts: [], taskEditing: null, questionEditing: null, questionImageData: '', yaumiahConfig: null, yaumiahEditing: null, attendanceConfig: null, attendanceCoords: null, activityFilter: '', organization: {}
 };
 
 let editorDialogState = null;
@@ -848,18 +850,73 @@ async function prepareQuestionForm() {
   if (!$('#question-id').value) resetQuestionForm();
 }
 
-function renderNativeQuestions(query = '') {
+function questionPageIds() {
+  return state.nativeQuestions.map(item => item.id);
+}
+
+function syncQuestionSelectionControls() {
+  const pageIds = questionPageIds();
+  const selectedOnPage = pageIds.filter(id => state.selectedQuestions.has(id)).length;
+  const allOnPage = Boolean(pageIds.length) && selectedOnPage === pageIds.length;
+  const pageCheckbox = $('[data-select-question-page]');
+  if (pageCheckbox) {
+    pageCheckbox.checked = allOnPage;
+    pageCheckbox.indeterminate = selectedOnPage > 0 && !allOnPage;
+  }
+  $('#selected-question-count').textContent = `${formatNumber(state.selectedQuestions.size)} dipilih`;
+  $('#select-page-questions').textContent = allOnPage ? 'Batalkan pilihan halaman' : 'Pilih semua di halaman';
+  $('#clear-question-selection').disabled = state.selectedQuestions.size === 0;
+  $('#bulk-approve-questions').disabled = state.selectedQuestions.size === 0;
+  $('#bulk-delete-questions').disabled = state.selectedQuestions.size === 0;
+}
+
+function replaceQuestionFilterOptions(select, values, allLabel, current) {
+  select.replaceChildren();
+  const all = document.createElement('option'); all.value = 'SEMUA'; all.textContent = allLabel; select.append(all);
+  values.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; select.append(option); });
+  select.value = values.includes(current) ? current : 'SEMUA';
+}
+
+function renderQuestionPagination() {
+  const container = $('#question-pagination'); container.replaceChildren();
+  const query = state.questionQuery;
+  const addButton = (label, targetPage, disabled) => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'small-button'; button.textContent = label; button.disabled = disabled;
+    button.addEventListener('click', () => { state.questionQuery.page = targetPage; loadNativeQuestions().catch(error => toast(error.message)); });
+    container.append(button);
+  };
+  addButton('Awal', 1, query.page <= 1);
+  addButton('Sebelumnya', query.page - 1, query.page <= 1);
+  const label = document.createElement('span'); label.className = 'pagination-label'; label.textContent = `Halaman ${query.page} dari ${query.totalPages}`; container.append(label);
+  addButton('Berikutnya', query.page + 1, query.page >= query.totalPages);
+  addButton('Akhir', query.totalPages, query.page >= query.totalPages);
+}
+
+function renderNativeQuestions() {
   const container = $('#native-question-table'); container.replaceChildren();
-  const rows = filterRows(state.nativeQuestions, query);
-  $('#native-question-count').textContent = `${formatNumber(rows.length)} soal`;
-  if (!rows.length) return container.append(emptyMessage('Belum ada soal yang sesuai.'));
+  const rows = state.nativeQuestions;
+  const query = state.questionQuery;
+  const first = query.total ? ((query.page - 1) * query.pageSize) + 1 : 0;
+  const last = query.total ? Math.min(query.page * query.pageSize, query.total) : 0;
+  $('#native-question-count').textContent = query.total ? `${formatNumber(first)}–${formatNumber(last)} dari ${formatNumber(query.total)} soal` : '0 soal';
+  if (!rows.length) {
+    container.append(emptyMessage('Belum ada soal yang sesuai dengan filter.'));
+    renderQuestionPagination(); syncQuestionSelectionControls(); return;
+  }
   const table = document.createElement('table'); table.className = 'data-table question-data-table';
   const head = document.createElement('thead'); const headRow = document.createElement('tr');
-  ['Pilih', 'ID / Mapel', 'Pertanyaan & opsi', 'Kelas', 'Status', 'Pembuat', 'Aksi'].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.append(th); });
+  const selectHeading = document.createElement('th');
+  const selectAll = document.createElement('input'); selectAll.type = 'checkbox'; selectAll.dataset.selectQuestionPage = 'true'; selectAll.setAttribute('aria-label', 'Pilih semua soal di halaman ini');
+  selectAll.addEventListener('change', () => {
+    questionPageIds().forEach(id => { if (selectAll.checked) state.selectedQuestions.add(id); else state.selectedQuestions.delete(id); });
+    renderNativeQuestions();
+  });
+  selectHeading.append(selectAll); headRow.append(selectHeading);
+  ['ID / Mapel', 'Pertanyaan & opsi', 'Kelas', 'Status', 'Pembuat', 'Aksi'].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.append(th); });
   head.append(headRow); const body = document.createElement('tbody');
   rows.forEach(item => {
     const tr = document.createElement('tr');
-    const selectCell = document.createElement('td'); const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = state.selectedQuestions.has(item.id); checkbox.addEventListener('change', () => { if (checkbox.checked) state.selectedQuestions.add(item.id); else state.selectedQuestions.delete(item.id); }); selectCell.append(checkbox);
+    const selectCell = document.createElement('td'); const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = state.selectedQuestions.has(item.id); checkbox.setAttribute('aria-label', `Pilih soal ${item.id}`); checkbox.addEventListener('change', () => { if (checkbox.checked) state.selectedQuestions.add(item.id); else state.selectedQuestions.delete(item.id); syncQuestionSelectionControls(); }); selectCell.append(checkbox);
     const identity = document.createElement('td'); const id = document.createElement('b'); id.textContent = item.id; const subject = document.createElement('small'); subject.textContent = `${item.subject}${item.packageId ? ` · ${item.packageId}` : ''}`; identity.append(id, subject);
     const question = document.createElement('td'); const text = document.createElement('b'); text.textContent = item.question; const options = document.createElement('small');
     const optionText = Object.entries(item.options || {}).filter(([, answer]) => answer).map(([key, answer]) => `${key}. ${answer}`).join(' · ');
@@ -883,7 +940,7 @@ function renderNativeQuestions(query = '') {
     if (item.packageId) { const removePackage = document.createElement('button'); removePackage.type = 'button'; removePackage.className = 'small-button danger-button'; removePackage.textContent = 'Hapus paket'; removePackage.addEventListener('click', () => deleteQuestionPackage(item)); actions.append(removePackage); }
     tr.append(selectCell, identity, question, classCell, statusCell, creator, actions); body.append(tr);
   });
-  table.append(head, body); container.append(table);
+  table.append(head, body); container.append(table); renderQuestionPagination(); syncQuestionSelectionControls();
 }
 
 function editNativeQuestion(item) {
@@ -900,10 +957,23 @@ function editNativeQuestion(item) {
   });
 }
 
-async function loadNativeQuestions() {
-  const result = await api('/api/v1/questions');
+async function loadNativeQuestions({ resetPage = false } = {}) {
+  if (resetPage) state.questionQuery.page = 1;
+  const query = state.questionQuery;
+  const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize), sort: query.sort });
+  if (query.search) params.set('search', query.search);
+  if (query.subject !== 'SEMUA') params.set('subject', query.subject);
+  if (query.classCode !== 'SEMUA') params.set('classCode', query.classCode);
+  const requestId = ++state.questionRequestId;
+  const result = await api(`/api/v1/questions?${params.toString()}`);
+  if (requestId !== state.questionRequestId) return;
   state.nativeQuestions = result.items || [];
-  renderNativeQuestions($('#native-question-search').value);
+  Object.assign(query, { page: result.page || 1, pageSize: result.pageSize || query.pageSize, total: result.total || 0, totalPages: result.totalPages || 1, subjects: result.filters?.subjects || [], classes: result.filters?.classes || [] });
+  replaceQuestionFilterOptions($('#native-question-subject-filter'), query.subjects, 'Semua mata pelajaran', query.subject);
+  replaceQuestionFilterOptions($('#native-question-class-filter'), query.classes, 'Semua kelas', query.classCode);
+  query.subject = $('#native-question-subject-filter').value;
+  query.classCode = $('#native-question-class-filter').value;
+  renderNativeQuestions();
 }
 
 function adjustQuestionStats(item, nextStatus, deleting = false) {
@@ -921,7 +991,7 @@ async function updateQuestionApproval(item, nextStatus, note = '') {
   try {
     const result = await nativeAction('UPDATE_APPROVAL_SOAL', { id: item.id, statusApproval: nextStatus, catatanRevisi: note });
     adjustQuestionStats(item, nextStatus); item.status = nextStatus; item.revisionNote = note;
-    renderNativeQuestions($('#native-question-search').value); toast(result.message || 'Status soal diperbarui.');
+    renderNativeQuestions(); toast(result.message || 'Status soal diperbarui.');
   } catch (error) { toast(error.message); }
 }
 
@@ -936,8 +1006,8 @@ async function deleteNativeQuestion(item) {
   if (!window.confirm(`Nonaktifkan soal “${item.id}”? Riwayat audit tetap disimpan.`)) return;
   try {
     const result = await nativeAction('DELETE_SOAL', { id: item.id });
-    adjustQuestionStats(item, '', true); state.nativeQuestions = state.nativeQuestions.filter(question => question.id !== item.id);
-    renderNativeQuestions($('#native-question-search').value); toast(result.message || 'Soal dinonaktifkan.');
+    adjustQuestionStats(item, '', true); state.selectedQuestions.delete(item.id); await loadNativeQuestions();
+    toast(result.message || 'Soal dinonaktifkan.');
   } catch (error) { toast(error.message); }
 }
 
@@ -1491,7 +1561,23 @@ $('#question-new').addEventListener('click', () => {
   openEditorDialog($('#question-form'), { eyebrow: 'Bank soal UAS', title: 'Tambah soal UAS', onClose: resetQuestionForm });
 });
 $('#question-reset').addEventListener('click', () => { if (dialogIsEditing($('#question-form'))) closeEditorDialog(); else resetQuestionForm(); });
-$('#native-question-search').addEventListener('input', event => renderNativeQuestions(event.target.value));
+let questionSearchTimer = null;
+$('#native-question-search').addEventListener('input', event => {
+  state.questionQuery.search = event.target.value.trim();
+  window.clearTimeout(questionSearchTimer);
+  questionSearchTimer = window.setTimeout(() => loadNativeQuestions({ resetPage: true }).catch(error => toast(error.message)), 300);
+});
+$('#native-question-subject-filter').addEventListener('change', event => { state.questionQuery.subject = event.target.value; loadNativeQuestions({ resetPage: true }).catch(error => toast(error.message)); });
+$('#native-question-class-filter').addEventListener('change', event => { state.questionQuery.classCode = event.target.value; loadNativeQuestions({ resetPage: true }).catch(error => toast(error.message)); });
+$('#native-question-sort').addEventListener('change', event => { state.questionQuery.sort = event.target.value; loadNativeQuestions({ resetPage: true }).catch(error => toast(error.message)); });
+$('#native-question-page-size').addEventListener('change', event => { state.questionQuery.pageSize = Number(event.target.value) || 25; loadNativeQuestions({ resetPage: true }).catch(error => toast(error.message)); });
+$('#select-page-questions').addEventListener('click', () => {
+  const ids = questionPageIds();
+  const allSelected = Boolean(ids.length) && ids.every(id => state.selectedQuestions.has(id));
+  ids.forEach(id => { if (allSelected) state.selectedQuestions.delete(id); else state.selectedQuestions.add(id); });
+  renderNativeQuestions();
+});
+$('#clear-question-selection').addEventListener('click', () => { state.selectedQuestions.clear(); renderNativeQuestions(); });
 $('#question-form').addEventListener('submit', async event => {
   event.preventDefault();
   const message = $('#question-message'); const button = event.currentTarget.querySelector('button[type="submit"]');
@@ -1586,7 +1672,7 @@ function printableQuestionsHtml(rows) {
 }
 
 $('#print-questions').addEventListener('click', () => {
-  const rows = filterRows(state.nativeQuestions, $('#native-question-search').value);
+  const rows = state.nativeQuestions;
   if (!rows.length) return toast('Tidak ada soal untuk dicetak.');
   const printable = window.open('', '_blank', 'noopener,noreferrer');
   if (!printable) return toast('Izinkan pop-up untuk mencetak naskah.');
@@ -1596,13 +1682,14 @@ $('#print-questions').addEventListener('click', () => {
 });
 
 $('#download-questions-word').addEventListener('click', () => {
-  const rows = filterRows(state.nativeQuestions, $('#native-question-search').value); if (!rows.length) return toast('Tidak ada soal untuk diunduh.');
+  const rows = state.nativeQuestions; if (!rows.length) return toast('Tidak ada soal untuk diunduh.');
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;line-height:1.5}article{margin-bottom:24px}img{max-width:520px;max-height:320px}</style></head><body><h1>Naskah Soal SISKU</h1>${printableQuestionsHtml(rows)}</body></html>`;
   const url = URL.createObjectURL(new Blob(['\ufeff', html], { type: 'application/msword' })); const link = document.createElement('a'); link.href = url; link.download = `Naskah-Soal-SISKU-${new Date().toISOString().slice(0,10)}.doc`; link.click(); URL.revokeObjectURL(url);
 });
 
 $('#bulk-approve-questions').addEventListener('click', async () => {
   const ids = Array.from(state.selectedQuestions); if (!ids.length) return toast('Pilih soal terlebih dahulu.');
+  if (!window.confirm(`Setujui ${ids.length} soal terpilih sekaligus?`)) return;
   try { const result = await nativeAction('BULK_APPROVE_SOAL', { ids }); state.selectedQuestions.clear(); await Promise.all([loadNativeQuestions(), loadDashboard()]); toast(result.message); } catch (error) { toast(error.message); }
 });
 

@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=2.37">
-  <script src="/assets/app.js?v=2.37" defer></script>
+  <link rel="stylesheet" href="/assets/styles.css?v=2.38">
+  <script src="/assets/app.js?v=2.38" defer></script>
 </head>
 <body>
   <div id="loading-bar" class="loading-bar" hidden><span></span></div>
@@ -113,7 +113,19 @@
           </form>
         </section>
         <details id="bulk-question-surface" class="surface bulk-surface"><summary><b>Impor / bulk soal</b><span>Format teks lama, JSON, atau TSV; maksimal 200 soal</span></summary><form id="bulk-question-form" class="data-form"><div class="form-grid three"><label>ID paket<input id="bulk-question-package" maxlength="100" placeholder="Otomatis"></label><label>Mapel default<select id="bulk-question-subject"></select></label><label>Kelas default<select id="bulk-question-class"></select></label></div><label>Data soal<textarea id="bulk-question-input" rows="10" required placeholder="[PG] Pertanyaan...&#10;A: Opsi A&#10;B: Opsi B&#10;C: Opsi C&#10;D: Opsi D&#10;KUNCI: B&#10;---"></textarea></label><p class="field-hint">Menerima format [PG]/[PGK]/[ISIAN]/[ESAI] seperti aplikasi GAS, array JSON, atau kolom TSV.</p><div id="bulk-question-message" class="form-message"></div><div class="form-actions"><button class="primary-button compact" type="submit">Impor semua soal</button><button id="bulk-question-example" class="secondary-button compact" type="button">Isi contoh</button></div></form></details>
-        <section class="surface"><div class="section-heading"><div><span>Bank soal native</span><h2>Daftar & approval soal</h2></div><div class="row-actions"><button id="print-questions" class="small-button" type="button">Cetak naskah</button><button id="download-questions-word" class="small-button" type="button">Unduh Word</button><span id="native-question-count" class="soft-badge">0 soal</span></div></div><div class="table-toolbar"><input id="native-question-search" type="search" placeholder="Cari ID, mapel, kelas, atau pertanyaan…"><div class="row-actions"><button id="bulk-approve-questions" class="small-button" type="button">Setujui terpilih</button><button id="bulk-delete-questions" class="small-button danger-button" type="button">Nonaktifkan terpilih</button></div></div><div id="native-question-table" class="table-wrap large-table"></div></section>
+        <section class="surface question-approval-surface">
+          <div class="section-heading"><div><span>Bank soal native</span><h2>Daftar & approval soal</h2></div><div class="row-actions"><button id="print-questions" class="small-button" type="button">Cetak halaman</button><button id="download-questions-word" class="small-button" type="button">Unduh halaman</button><span id="native-question-count" class="soft-badge">0 soal</span></div></div>
+          <div class="question-filter-grid">
+            <label class="question-search-field">Cari soal<input id="native-question-search" type="search" placeholder="ID, mapel, kelas, pertanyaan, atau pembuat…"></label>
+            <label>Mata pelajaran<select id="native-question-subject-filter"><option value="SEMUA">Semua mata pelajaran</option></select></label>
+            <label>Kelas<select id="native-question-class-filter"><option value="SEMUA">Semua kelas</option></select></label>
+            <label>Urutkan<select id="native-question-sort"><option value="updated_desc">Terbaru diperbarui</option><option value="subject_asc">Mata pelajaran A–Z</option><option value="class_asc">Kelas A–Z</option><option value="approval_asc">Menunggu approval dahulu</option></select></label>
+            <label>Per halaman<select id="native-question-page-size"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select></label>
+          </div>
+          <div class="question-bulk-toolbar"><div class="row-actions"><button id="select-page-questions" class="small-button" type="button">Pilih semua di halaman</button><button id="clear-question-selection" class="small-button" type="button">Bersihkan pilihan</button><span id="selected-question-count" class="soft-badge">0 dipilih</span></div><div class="row-actions"><button id="bulk-approve-questions" class="small-button" type="button">Setujui terpilih</button><button id="bulk-delete-questions" class="small-button danger-button" type="button">Nonaktifkan terpilih</button></div></div>
+          <div id="native-question-table" class="table-wrap large-table"></div>
+          <nav id="question-pagination" class="table-pagination" aria-label="Halaman bank soal"></nav>
+        </section>
         <div class="two-column"><section class="surface"><div class="section-heading"><div><span>Bank soal</span><h2>Rekap per mapel</h2></div></div><div id="question-table" class="table-wrap large-table"></div></section><section class="surface"><div class="section-heading"><div><span>Kontrol ujian</span><h2>Status sesi</h2></div></div><div id="session-list" class="session-list"></div></section></div>
       </section>
 
@@ -155,7 +167,7 @@
     </main>
 
     <nav id="bottom-navigation" class="bottom-navigation" aria-label="Menu seluler"></nav>
-    <footer class="app-footer"><span>SISKU Railway v2.37</span><span>Operasional berjalan native di PostgreSQL Railway</span></footer>
+    <footer class="app-footer"><span>SISKU Railway v2.38</span><span>Operasional berjalan native di PostgreSQL Railway</span></footer>
   </div>
   <dialog id="editor-dialog" class="editor-dialog" aria-labelledby="editor-dialog-title">
     <div class="editor-dialog-shell">

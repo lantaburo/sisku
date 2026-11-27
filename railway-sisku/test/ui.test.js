@@ -46,8 +46,8 @@ test('Railway menyediakan pembuatan soal dan CRUD master native PostgreSQL', () 
 });
 
 test('form tambah soal dan seluruh aksi ubah utama memakai popup', () => {
-  assert.match(html, /assets\/app\.js\?v=2\.37/);
-  assert.match(html, /assets\/styles\.css\?v=2\.37/);
+  assert.match(html, /assets\/app\.js\?v=2\.38/);
+  assert.match(html, /assets\/styles\.css\?v=2\.38/);
   assert.match(html, /id="question-new"[^>]*>\+ Tambah soal</);
   assert.match(html, /id="question-form-surface"[^>]*hidden/);
   assert.match(html, /id="editor-dialog"/);
@@ -81,4 +81,19 @@ test('impersonasi tersedia dari tab guru, siswa, dan orang tua', () => {
   assert.match(js, /\['accounts', 'Semua akun'\].*\['students', 'Siswa'\].*\['teachers', 'Guru'\].*\['parents', 'Orang Tua'\]/);
   assert.match(js, /\['accounts', 'students', 'teachers', 'parents'\]\.includes\(resource\)/);
   assert.match(js, /Lihat sebagai/);
+});
+
+test('bank soal memakai pagination, filter, dan urutan dari server', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
+  for (const id of ['native-question-search', 'native-question-subject-filter', 'native-question-class-filter', 'native-question-sort', 'native-question-page-size', 'select-page-questions', 'clear-question-selection', 'selected-question-count', 'question-pagination']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(js, /\/api\/v1\/questions\?\$\{params\.toString\(\)\}/);
+  assert.match(js, /requestId !== state\.questionRequestId/);
+  assert.match(js, /dataset\.selectQuestionPage/);
+  assert.match(server, /\[10, 25, 50, 100\]\.includes\(requestedPageSize\)/);
+  assert.match(server, /LIMIT \$\$\{limitIndex\} OFFSET \$\$\{offsetIndex\}/);
+  assert.match(server, /totalPages/);
+  assert.doesNotMatch(server, /ORDER BY updated_at DESC, id\s+LIMIT 500/);
+  assert.match(css, /\.table-pagination/);
 });

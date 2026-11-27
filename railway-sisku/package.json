@@ -1,6 +1,6 @@
 {
   "name": "sisku-railway",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "description": "Fondasi produksi SISKU di Railway dengan PostgreSQL dan migrasi aman dari Google Sheets",
   "engines": {

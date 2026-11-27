@@ -650,25 +650,71 @@ app.get('/api/v1/master/:resource', requireAuth, requireRoles('superadmin', 'kep
 
 app.get('/api/v1/questions', requireAuth, requireRoles('superadmin', 'kepsek', 'guru'), async (req, res, next) => {
   try {
-    const params = [];
-    let ownerClause = '';
+    const requestedPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const requestedPageSize = Number.parseInt(req.query.pageSize, 10) || 25;
+    const pageSize = [10, 25, 50, 100].includes(requestedPageSize) ? requestedPageSize : 25;
+    const search = String(req.query.search || '').trim().slice(0, 200);
+    const subject = String(req.query.subject || '').trim().slice(0, 160);
+    const classCode = String(req.query.classCode || '').trim().slice(0, 80);
+    const sortSql = {
+      updated_desc: 'updated_at DESC, id',
+      subject_asc: 'lower(subject), lower(class_code), updated_at DESC, id',
+      class_asc: 'lower(class_code), lower(subject), updated_at DESC, id',
+      approval_asc: "CASE WHEN approval_status = 'Approved' THEN 1 ELSE 0 END, lower(subject), lower(class_code), updated_at DESC, id"
+    }[String(req.query.sort || 'updated_desc')] || 'updated_at DESC, id';
+
+    const scopeParams = [];
+    const scopeConditions = ['active = true'];
     if (req.user.role === 'guru') {
-      params.push(req.user.username.toLowerCase());
-      ownerClause = 'AND lower(creator_username) = $1';
+      scopeParams.push(req.user.username.toLowerCase());
+      scopeConditions.push(`lower(creator_username) = $${scopeParams.length}`);
     }
+
+    const params = scopeParams.slice();
+    const conditions = scopeConditions.slice();
+    const addCondition = (valueToAdd, sqlForIndex) => {
+      params.push(valueToAdd);
+      conditions.push(sqlForIndex(params.length));
+    };
+    if (search) addCondition(`%${search}%`, index => `(id ILIKE $${index} OR subject ILIKE $${index} OR class_code ILIKE $${index} OR question_text ILIKE $${index} OR creator_username ILIKE $${index})`);
+    if (subject && subject !== 'SEMUA') addCondition(subject, index => `lower(subject) = lower($${index})`);
+    if (classCode && classCode !== 'SEMUA') addCondition(classCode, index => `lower(class_code) = lower($${index})`);
+
+    const whereSql = conditions.join(' AND ');
+    const scopeWhereSql = scopeConditions.join(' AND ');
+    const [countResult, facetResult] = await Promise.all([
+      db().query(`SELECT count(*)::int AS total FROM school_questions WHERE ${whereSql}`, params),
+      db().query(
+        `SELECT array_agg(DISTINCT subject ORDER BY subject) FILTER (WHERE subject <> '') AS subjects,
+                array_agg(DISTINCT class_code ORDER BY class_code) FILTER (WHERE class_code <> '') AS classes
+           FROM school_questions WHERE ${scopeWhereSql}`,
+        scopeParams
+      )
+    ]);
+    const total = Number(countResult.rows[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const queryParams = params.concat([pageSize, (page - 1) * pageSize]);
+    const limitIndex = params.length + 1;
+    const offsetIndex = params.length + 2;
     const result = await db().query(
       `SELECT id, subject, class_code, cognitive_level, competency, question_text, options,
               answer_key, approval_status, question_type, revision_note, image_url,
               creator_username, package_id, created_at, updated_at
          FROM school_questions
-        WHERE active = true ${ownerClause}
-        ORDER BY updated_at DESC, id
-        LIMIT 500`,
-      params
+        WHERE ${whereSql}
+        ORDER BY ${sortSql}
+        LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
+      queryParams
     );
+    const facets = facetResult.rows[0] || {};
     res.json({
       status: 'ok',
-      total: result.rowCount,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      filters: { subjects: facets.subjects || [], classes: facets.classes || [] },
       items: result.rows.map(row => ({
         id: row.id, subject: row.subject, classCode: row.class_code,
         level: row.cognitive_level, competency: row.competency,
