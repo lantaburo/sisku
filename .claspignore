@@ -1,8 +1,6 @@
 # Abaikan folder app/ (Node.js local server, tidak perlu di Apps Script)
 app/
 app/**
-railway-sisku/
-railway-sisku/**
 scripts/
 scripts/**
 
